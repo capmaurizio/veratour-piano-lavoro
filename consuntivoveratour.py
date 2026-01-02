@@ -974,6 +974,20 @@ def create_total_by_apt_sheet(detail_df: pd.DataFrame) -> pd.DataFrame:
             return 0.0
         return round(minutes / 60.0, 2)
     
+    def min_to_hours_minutes_text(minutes):
+        """Convert minutes to 'X ore e Y minuti' format"""
+        if pd.isna(minutes) or minutes == 0:
+            return "0 ore e 0 minuti"
+        total_minutes = int(minutes)
+        hours = total_minutes // 60
+        mins = total_minutes % 60
+        if hours == 0:
+            return f"{mins} minuti"
+        elif mins == 0:
+            return f"{hours} ore"
+        else:
+            return f"{hours} ore e {mins} minuti"
+    
     result = pd.DataFrame({
         'Aeroporto': totals_by_apt.index,
         'Blocchi': block_counts.values,
@@ -993,8 +1007,8 @@ def create_total_by_apt_sheet(detail_df: pd.DataFrame) -> pd.DataFrame:
         'Aeroporto': result['Aeroporto'],
         'Blocchi': result['Blocchi'],
         'Assistenze': result['Assistenze'].apply(format_eur),
-        'Extra': result.apply(lambda x: f"{format_eur(x['Extra_eur'])} ({x['Extra_ore']:.2f}h)", axis=1),
-        'Notturno': result.apply(lambda x: f"{format_eur(x['Notturno_eur'])} ({x['Notturno_ore']:.2f}h)", axis=1),
+        'Extra': result.apply(lambda x: f"{format_eur(x['Extra_eur'])} ({min_to_hours_minutes_text(x['Extra_min'])})", axis=1),
+        'Notturno': result.apply(lambda x: f"{format_eur(x['Notturno_eur'])} ({min_to_hours_minutes_text(x['Notturno_min'])})", axis=1),
         'TOTALE': result['TOTALE'].apply(format_eur),
     })
     
@@ -1008,8 +1022,8 @@ def create_total_by_apt_sheet(detail_df: pd.DataFrame) -> pd.DataFrame:
         'Aeroporto': 'TOTALE',
         'Blocchi': output_df['Blocchi'].sum(),
         'Assistenze': format_eur(result['Assistenze'].sum()),
-        'Extra': f"{format_eur(result['Extra_eur'].sum())} ({min_to_hours_decimal(result['Extra_min'].sum()):.2f}h)",
-        'Notturno': f"{format_eur(result['Notturno_eur'].sum())} ({min_to_hours_decimal(result['Notturno_min'].sum()):.2f}h)",
+        'Extra': f"{format_eur(result['Extra_eur'].sum())} ({min_to_hours_minutes_text(result['Extra_min'].sum())})",
+        'Notturno': f"{format_eur(result['Notturno_eur'].sum())} ({min_to_hours_minutes_text(result['Notturno_min'].sum())})",
         'TOTALE': format_eur(result['TOTALE'].sum()),
     }])
     
