@@ -9,11 +9,13 @@ venv/
 ENV/
 .venv
 
-# Excel temporanei
+# Excel temporanei e file di lavoro
 ~$*.xlsx
 OUT_*.xlsx
 TEST_*.xlsx
 *_TEMP.xlsx
+*.xlsx
+*.docx
 
 # IDE
 .vscode/
