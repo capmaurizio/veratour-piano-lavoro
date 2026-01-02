@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import argparse
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, date, time
 from typing import Dict, List, Optional, Tuple, Iterable
 
@@ -103,8 +103,8 @@ class CalcConfig:
     night_mode: str = "DIFF5"  # DIFF5 -> 0.083333/min (5€/h = 25€/h × 20%); FULL30 -> 0.5/min
     night_diff_eur_per_min: float = 0.083333  # 5€/ora = 25€/ora × 20% = 0.083333€/min
     night_full_eur_per_min: float = 0.5
-    rounding_extra: RoundingPolicy = RoundingPolicy("NONE", 5)
-    rounding_night: RoundingPolicy = RoundingPolicy("NONE", 5)
+    rounding_extra: RoundingPolicy = field(default_factory=lambda: RoundingPolicy("NONE", 5))
+    rounding_night: RoundingPolicy = field(default_factory=lambda: RoundingPolicy("NONE", 5))
     festivo_multiplier: float = 1.20
     holiday_dates: Optional[set[date]] = None  # optional external list
 
