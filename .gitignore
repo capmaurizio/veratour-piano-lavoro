@@ -25,6 +25,7 @@ TEST_*.xlsx
 .DS_Store
 Thumbs.db
 
-# Streamlit
-.streamlit/
+# Streamlit (escludi solo cache, non config)
+.streamlit/cache/
+.streamlit/secrets.toml
 
