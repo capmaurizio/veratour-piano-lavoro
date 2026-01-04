@@ -349,6 +349,67 @@ if uploaded_file is not None:
             with st.expander("⚠️ Discrepanze Rilevate", expanded=True):
                 st.dataframe(st.session_state['discr_df'], use_container_width=True)
                 st.info("Le discrepanze indicano possibili inconsistenze nei dati di input. Controlla il file Excel generato per i dettagli completi.")
+        
+        # Dettaglio per Assistente VRN
+        if 'detail_df' in st.session_state and not st.session_state['detail_df'].empty:
+            df_detail = st.session_state['detail_df']
+            if 'ASSISTENTE' in df_detail.columns and 'APT' in df_detail.columns:
+                df_vrn = df_detail[(df_detail['APT'] == 'VRN') & (df_detail['ASSISTENTE'].notna()) & (df_detail['ASSISTENTE'] != '')].copy()
+                if not df_vrn.empty:
+                    with st.expander("👥 Dettaglio Giorno per Giorno - Assistenti VRN", expanded=True):
+                        assistenti_list = sorted(df_vrn['ASSISTENTE'].unique())
+                        selected_assistente = st.selectbox(
+                            "Seleziona Assistente",
+                            options=assistenti_list,
+                            index=0 if 'Manu' in assistenti_list else 0
+                        )
+                        
+                        if selected_assistente:
+                            df_assistente = df_vrn[df_vrn['ASSISTENTE'] == selected_assistente].copy()
+                            df_assistente = df_assistente.sort_values('DATA')
+                            
+                            # Crea tabella formattata
+                            display_df = df_assistente[[
+                                'DATA', 'TURNO_NORMALIZZATO', 'DURATA_TURNO_MIN', 
+                                'TURNO_EUR', 'EXTRA_H:MM', 'EXTRA_EUR', 
+                                'NOTTE_MIN', 'NOTTE_EUR', 'FESTIVO', 'TOTALE_BLOCCO_EUR'
+                            ]].copy()
+                            
+                            # Formatta colonne
+                            display_df['Durata (h:mm)'] = display_df['DURATA_TURNO_MIN'].apply(lambda x: f"{int(x//60)}:{int(x%60):02d}")
+                            display_df['Notturno (h:mm)'] = display_df['NOTTE_MIN'].apply(lambda x: f"{int(x//60)}:{int(x%60):02d}")
+                            display_df['Festivo'] = display_df['FESTIVO'].apply(lambda x: "Sì" if x else "No")
+                            
+                            # Riordina colonne
+                            display_df = display_df[[
+                                'DATA', 'TURNO_NORMALIZZATO', 'Durata (h:mm)', 
+                                'TURNO_EUR', 'EXTRA_H:MM', 'EXTRA_EUR', 
+                                'Notturno (h:mm)', 'NOTTE_EUR', 'Festivo', 'TOTALE_BLOCCO_EUR'
+                            ]]
+                            
+                            display_df.columns = [
+                                'Data', 'Turno', 'Durata', 'Turno (€)', 
+                                'Extra (h:mm)', 'Extra (€)', 'Notturno (h:mm)', 
+                                'Notturno (€)', 'Festivo', 'TOTALE (€)'
+                            ]
+                            
+                            # Formatta valori monetari
+                            for col in ['Turno (€)', 'Extra (€)', 'Notturno (€)', 'TOTALE (€)']:
+                                display_df[col] = display_df[col].apply(lambda x: f"{x:.2f}€")
+                            
+                            st.dataframe(display_df, use_container_width=True, hide_index=True)
+                            
+                            # Totali
+                            st.markdown(f"**📊 Totali per {selected_assistente}:**")
+                            col1, col2, col3, col4 = st.columns(4)
+                            with col1:
+                                st.metric("Turno", f"{df_assistente['TURNO_EUR'].sum():.2f}€")
+                            with col2:
+                                st.metric("Extra", f"{df_assistente['EXTRA_EUR'].sum():.2f}€")
+                            with col3:
+                                st.metric("Notturno", f"{df_assistente['NOTTE_EUR'].sum():.2f}€")
+                            with col4:
+                                st.metric("TOTALE", f"{df_assistente['TOTALE_BLOCCO_EUR'].sum():.2f}€")
 
 else:
     st.info("""
