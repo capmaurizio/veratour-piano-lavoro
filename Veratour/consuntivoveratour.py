@@ -945,6 +945,163 @@ def create_apt_detail_sheet(df_apt: pd.DataFrame) -> pd.DataFrame:
     return result_df
 
 
+def create_assistenti_vrn_sheet(detail_df: pd.DataFrame) -> pd.DataFrame:
+    """Crea foglio con calcoli per assistenti VRN secondo accordo assistenti"""
+    if detail_df.empty:
+        return pd.DataFrame()
+    
+    # Filtra solo VRN
+    df_vrn = detail_df[detail_df['APT'] == 'VRN'].copy()
+    
+    if df_vrn.empty or 'ASSISTENTE' not in df_vrn.columns:
+        return pd.DataFrame()
+    
+    # Rimuovi righe senza assistente
+    df_vrn = df_vrn[df_vrn['ASSISTENTE'].notna() & (df_vrn['ASSISTENTE'] != '')].copy()
+    
+    if df_vrn.empty:
+        return pd.DataFrame()
+    
+    # Tariffe assistenti (dal documento Accordo_Assistenti_VRN 26_Completo)
+    BASE_ASSISTENTE = 58.0  # € per 3h
+    EXTRA_ASSISTENTE_PER_H = 12.0  # €/h
+    MAGG_NOTTURNA_PERC = 0.15  # +15% proporzionale
+    MAGG_FESTIVO_PERC = 0.20  # +20% su tutto
+    
+    # Festivi (dal documento)
+    from datetime import date
+    festivi_2025 = {
+        date(2025, 12, 25),  # Natale
+        date(2025, 12, 26),  # Santo Stefano
+        date(2025, 1, 1),    # Capodanno
+        date(2025, 1, 6),    # Epifania
+        date(2025, 4, 25),   # Liberazione
+        date(2025, 5, 1),    # Festa del Lavoro
+        date(2025, 6, 2),    # Festa della Repubblica
+        date(2025, 8, 15),   # Ferragosto
+        date(2025, 11, 1),   # Ognissanti
+        date(2025, 12, 8),   # Immacolata
+    }
+    # Aggiungi Pasqua e Pasquetta 2025
+    easter_2025 = easter(2025)
+    festivi_2025.add(easter_2025)
+    festivi_2025.add(easter_2025 + pd.Timedelta(days=1))
+    
+    def calcola_turno_assistente(durata_min):
+        """Calcola turno assistente: 58€ base + 12€/h oltre 3h"""
+        durata_h = durata_min / 60.0
+        if durata_h <= 3:
+            return BASE_ASSISTENTE
+        else:
+            return BASE_ASSISTENTE + (durata_h - 3) * EXTRA_ASSISTENTE_PER_H
+    
+    def calcola_extra_assistente(extra_min):
+        """Calcola extra assistente: 12€/h"""
+        if extra_min <= 0:
+            return 0.0
+        return (extra_min / 60.0) * EXTRA_ASSISTENTE_PER_H
+    
+    def calcola_notturno_assistente(base, minuti_notturni):
+        """Calcola notturno proporzionale: (base/3h) * (ore_notturne) * 15%"""
+        if minuti_notturni <= 0:
+            return 0.0
+        valore_orario = base / 3.0  # €/h
+        ore_notturne = minuti_notturni / 60.0
+        valore_parte_notturna = valore_orario * ore_notturne
+        maggiorazione = valore_parte_notturna * MAGG_NOTTURNA_PERC
+        return maggiorazione
+    
+    def is_festivo(data_str):
+        """Verifica se la data è festiva"""
+        try:
+            dt = pd.to_datetime(data_str, dayfirst=True)
+            return dt.date() in festivi_2025
+        except:
+            return False
+    
+    # Calcola per ogni riga
+    rows_assistenti = []
+    for _, row in df_vrn.iterrows():
+        assistente = row['ASSISTENTE']
+        durata_min = int(row['DURATA_TURNO_MIN'])
+        extra_min = int(row.get('EXTRA_MIN', 0))
+        minuti_notturni = int(row.get('NOTTE_MIN', 0))
+        data_str = row['DATA']
+        
+        # Calcoli assistente
+        base = calcola_turno_assistente(durata_min)
+        extra = calcola_extra_assistente(extra_min)
+        notturno = calcola_notturno_assistente(base, minuti_notturni)
+        
+        # Festivo: +20% su (base + extra + notturno)
+        festivo = is_festivo(data_str)
+        subtotale = base + extra + notturno
+        totale = subtotale * (1 + MAGG_FESTIVO_PERC) if festivo else subtotale
+        
+        rows_assistenti.append({
+            'ASSISTENTE': assistente,
+            'BASE_EUR': base,
+            'EXTRA_EUR': extra,
+            'EXTRA_MIN': extra_min,
+            'NOTTE_MIN': minuti_notturni,
+            'NOTTE_EUR': notturno,
+            'TOTALE_EUR': totale,
+        })
+    
+    df_calc = pd.DataFrame(rows_assistenti)
+    
+    # Raggruppa per assistente
+    assistenti_totals = df_calc.groupby('ASSISTENTE').agg({
+        'BASE_EUR': 'sum',
+        'EXTRA_EUR': 'sum',
+        'EXTRA_MIN': 'sum',
+        'NOTTE_EUR': 'sum',
+        'NOTTE_MIN': 'sum',
+        'TOTALE_EUR': 'sum',
+        'ASSISTENTE': 'count'  # Numero di blocchi
+    }).round(2)
+    
+    assistenti_totals.columns = ['Turno (€)', 'Extra (€)', 'Extra (min)', 'Notturno (€)', 'Notturno (min)', 'TOTALE (€)', 'Blocchi']
+    assistenti_totals = assistenti_totals.reset_index()
+    assistenti_totals.columns = ['Assistente', 'Turno (€)', 'Extra (€)', 'Extra (min)', 'Notturno (€)', 'Notturno (min)', 'TOTALE (€)', 'Blocchi']
+    
+    # Formatta Extra e Notturno in ore:minuti
+    def format_hmm(minutes):
+        if pd.isna(minutes) or minutes == 0:
+            return "0:00"
+        h = int(minutes // 60)
+        m = int(minutes % 60)
+        return f"{h}:{m:02d}"
+    
+    assistenti_totals['Extra (h:mm)'] = assistenti_totals['Extra (min)'].apply(format_hmm)
+    assistenti_totals['Notturno (h:mm)'] = assistenti_totals['Notturno (min)'].apply(format_hmm)
+    
+    # Riordina colonne
+    result = assistenti_totals[[
+        'Assistente', 'Blocchi', 'Turno (€)', 'Extra (h:mm)', 'Extra (€)', 
+        'Notturno (h:mm)', 'Notturno (€)', 'TOTALE (€)'
+    ]].copy()
+    
+    # Ordina per totale decrescente
+    result = result.sort_values('TOTALE (€)', ascending=False)
+    
+    # Aggiungi riga totale
+    total_row = pd.DataFrame([{
+        'Assistente': 'TOTALE',
+        'Blocchi': result['Blocchi'].sum(),
+        'Turno (€)': result['Turno (€)'].sum(),
+        'Extra (h:mm)': format_hmm(assistenti_totals['Extra (min)'].sum()),
+        'Extra (€)': result['Extra (€)'].sum(),
+        'Notturno (h:mm)': format_hmm(assistenti_totals['Notturno (min)'].sum()),
+        'Notturno (€)': result['Notturno (€)'].sum(),
+        'TOTALE (€)': result['TOTALE (€)'].sum(),
+    }])
+    
+    result = pd.concat([result, total_row], ignore_index=True)
+    
+    return result
+
+
 def create_total_by_apt_sheet(detail_df: pd.DataFrame) -> pd.DataFrame:
     """Create total sheet grouped by airport"""
     if detail_df.empty:
@@ -1071,6 +1228,12 @@ def write_output_excel(output_path: str, detail_df: pd.DataFrame, totals_df: pd.
             total_sheet = create_total_by_apt_sheet(detail_df)
             if not total_sheet.empty:
                 total_sheet.to_excel(writer, sheet_name="TOTALE", index=False)
+        
+        # Create Assistenti VRN sheet
+        if not detail_df.empty:
+            assistenti_sheet = create_assistenti_vrn_sheet(detail_df)
+            if not assistenti_sheet.empty:
+                assistenti_sheet.to_excel(writer, sheet_name="Assistenti_VRN", index=False)
 
         # Basic column widths
         for sheet in writer.book.worksheets:
