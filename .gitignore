@@ -15,7 +15,9 @@ OUT_*.xlsx
 TEST_*.xlsx
 *_TEMP.xlsx
 *.xlsx
+*.xls
 *.docx
+*.pdf
 
 # IDE
 .vscode/

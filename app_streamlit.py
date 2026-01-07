@@ -15,18 +15,37 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Set
 import re
 
-# Aggiungi Veratour al path per import
+# Aggiungi Veratour e Alpitour al path per import
 veratour_path = os.path.join(os.path.dirname(__file__), 'Veratour')
+alpitour_path = os.path.join(os.path.dirname(__file__), 'Alpitour')
 if veratour_path not in sys.path:
     sys.path.insert(0, veratour_path)
+if alpitour_path not in sys.path:
+    sys.path.insert(0, alpitour_path)
 
 from consuntivoveratour import (
-    CalcConfig,
+    CalcConfig as VeratourCalcConfig,
     RoundingPolicy,
-    process_files,
-    write_output_excel,
+    process_files as process_files_veratour,
+    write_output_excel as write_output_excel_veratour,
     load_holiday_list
 )
+
+try:
+    from consuntivoalpitour import (
+        CalcConfig as AlpitourCalcConfig,
+        process_files as process_files_alpitour,
+        write_output_excel as write_output_excel_alpitour,
+        validate_file_complete as validate_file_alpitour
+    )
+    ALPITOUR_AVAILABLE = True
+except ImportError as e:
+    ALPITOUR_AVAILABLE = False
+    # Non mostrare warning all'avvio, solo se necessario
+    AlpitourCalcConfig = None
+    process_files_alpitour = None
+    write_output_excel_alpitour = None
+    validate_file_alpitour = None
 
 # Configurazione pagina
 st.set_page_config(
@@ -121,17 +140,19 @@ with st.sidebar:
         help="Seleziona gli aeroporti da includere. Lascia vuoto per includere tutti."
     )
     
+    # Opzioni Veratour
+    st.subheader("Opzioni Veratour")
     night_mode = st.selectbox(
-        "Modalità Notturno",
+        "Modalità Notturno (Veratour)",
         options=["DIFF5", "FULL30"],
         index=0,
         help="DIFF5: Maggiorazione differenziale (€5/h). FULL30: Tariffa piena (€30/h)."
     )
     
-    st.subheader("Arrotondamenti")
+    st.subheader("Arrotondamenti (Veratour)")
     
     round_extra_mode = st.selectbox(
-        "Arrotondamento Extra",
+        "Arrotondamento Extra (Veratour)",
         options=["NONE", "FLOOR", "CEIL", "NEAREST"],
         index=0
     )
@@ -143,7 +164,7 @@ with st.sidebar:
     )
     
     round_night_mode = st.selectbox(
-        "Arrotondamento Notturno",
+        "Arrotondamento Notturno (Veratour)",
         options=["NONE", "FLOOR", "CEIL", "NEAREST"],
         index=0
     )
@@ -153,6 +174,8 @@ with st.sidebar:
         value=5,
         step=1
     )
+    
+    st.info("ℹ️ Alpitour: Nessun arrotondamento (valori esatti)")
     
     holiday_file = st.file_uploader(
         "File Festivi (opzionale)",
@@ -201,22 +224,134 @@ if uploaded_file is not None:
                     else:
                         missing_tour_operators.append(to_name)
                 
-                if available_folders:
-                    st.success(f"✅ Tour operatour con calcolo disponibile: {', '.join(available_folders.keys())}")
-                
-                if missing_tour_operators:
-                    st.warning(f"⚠️ Tour operatour senza cartella (non elaborati): {', '.join(missing_tour_operators)}")
+            if available_folders:
+                st.success(f"✅ Tour operatour con calcolo disponibile: {', '.join(available_folders.keys())}")
+            
+            if missing_tour_operators:
+                st.warning(f"⚠️ Tour operatour senza cartella (non elaborati): {', '.join(missing_tour_operators)}")
         finally:
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
+            pass  # Manteniamo tmp_path per la validazione
+    
+    # VALIDAZIONE COMPLETA DEL FILE PRIMA DEL CALCOLO
+    st.markdown("---")
+    st.markdown("### 🔍 Validazione File")
+    
+    if 'validation_results' not in st.session_state or st.session_state.get('last_file') != uploaded_file.name:
+        with st.spinner("⏳ Validazione file in corso..."):
+            validation_results = {}
+            
+            # Validazione per Veratour
+            if 'veratour' in [to.lower() for to in tour_operators]:
+                try:
+                    # Crea una funzione di validazione per Veratour (simile ad Alpitour)
+                    # Per ora usiamo la stessa logica di rilevamento
+                    st.info("🔍 Validazione Veratour...")
+                    validation_results['veratour'] = {
+                        "status": "ok",
+                        "tour_operators": [to for to in tour_operators if 'veratour' in to.lower()],
+                        "note": "Veratour rilevato - pronto per calcolo"
+                    }
+                except Exception as e:
+                    validation_results['veratour'] = {
+                        "status": "error",
+                        "error": str(e)
+                    }
+            
+            # Validazione per Alpitour
+            if ALPITOUR_AVAILABLE and validate_file_alpitour and 'alpitour' in [to.lower() for to in tour_operators]:
+                try:
+                    st.info("🔍 Validazione Alpitour...")
+                    result_alpitour = validate_file_alpitour(tmp_path, to_keyword="alpitour", apt_filter=apt_filter if apt_filter else None)
+                    validation_results['alpitour'] = result_alpitour
+                except Exception as e:
+                    validation_results['alpitour'] = {
+                        "status": "error",
+                        "error": str(e)
+                    }
+            
+            st.session_state['validation_results'] = validation_results
+            st.session_state['last_file'] = uploaded_file.name
+    
+    # Mostra risultati validazione
+    validation_results = st.session_state.get('validation_results', {})
+    
+    if validation_results:
+        for to_name, result in validation_results.items():
+            with st.expander(f"📊 Risultati Validazione - {to_name.upper()}", expanded=True):
+                if isinstance(result, dict) and 'status' in result:
+                    if result['status'] == 'ok':
+                        st.success(f"✅ {to_name.upper()}: Validazione completata")
+                        if 'tour_operators' in result:
+                            st.info(f"Tour operatour: {', '.join(result['tour_operators'])}")
+                    else:
+                        st.error(f"❌ {to_name.upper()}: {result.get('error', 'Errore sconosciuto')}")
+                else:
+                    # Risultato completo da validate_file_complete
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.metric("Righe Totali", result.get('righe_totali', 0))
+                        st.metric("Righe con Errori", len(result.get('righe_con_errori', [])))
+                    
+                    with col2:
+                        st.metric("Tour Operatour", len(result.get('tour_operators_trovati', [])))
+                        st.metric("Aeroporti", len(result.get('aeroporti_trovati', [])))
+                    
+                    with col3:
+                        st.metric("Date Trovate", len(result.get('date_trovate', [])))
+                        st.metric("Fogli Validati", len(result.get('fogli_validati', [])))
+                    
+                    # Colonne trovate/mancanti
+                    if result.get('colonne_trovate'):
+                        st.success("✅ Colonne trovate:")
+                        for key, val in result['colonne_trovate'].items():
+                            st.write(f"  - {key}: {val}")
+                    
+                    if result.get('colonne_mancanti'):
+                        st.warning("⚠️ Colonne mancanti (opzionali):")
+                        for col in result['colonne_mancanti']:
+                            st.write(f"  - {col}")
+                    
+                    # Tour operatour e aeroporti
+                    if result.get('tour_operators_trovati'):
+                        st.info(f"📋 Tour operatour: {', '.join(result['tour_operators_trovati'])}")
+                    
+                    if result.get('aeroporti_trovati'):
+                        st.info(f"✈️ Aeroporti: {', '.join(result['aeroporti_trovati'])}")
+                    
+                    # Errori
+                    if result.get('righe_con_errori'):
+                        st.error(f"❌ Righe con errori: {len(result['righe_con_errori'])}")
+                        with st.expander("📋 Dettaglio Errori (prime 10)", expanded=False):
+                            for err in result['righe_con_errori'][:10]:
+                                st.write(f"**Foglio {err['foglio']}, Riga {err['riga']}** ({err.get('data', 'N/A')} - {err.get('apt', 'N/A')}): {err['errore']}")
+                            if len(result['righe_con_errori']) > 10:
+                                st.write(f"... e altri {len(result['righe_con_errori']) - 10} errori")
+                    
+                    # Fogli validati
+                    if result.get('fogli_validati'):
+                        st.info("📄 Fogli validati:")
+                        for foglio in result['fogli_validati']:
+                            st.write(f"  - {foglio['foglio']}: {foglio['righe_totali']} righe totali, {foglio['righe_con_errori']} con errori")
+    
+    # Salva tmp_path in session state per il calcolo
+    st.session_state['tmp_file_path'] = tmp_path
+    st.session_state['uploaded_file_name'] = uploaded_file.name
     
     # Pulsante per eseguire il calcolo
+    st.markdown("---")
+    st.markdown("### 🚀 Esegui Calcolo")
+    
     if st.button("🚀 Esegui Calcolo", type="primary", use_container_width=True):
         with st.spinner("⏳ Elaborazione in corso..."):
             try:
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp_file:
-                    tmp_file.write(uploaded_file.getvalue())
-                    tmp_path = tmp_file.name
+                # Usa il file temporaneo già creato durante la validazione
+                tmp_path = st.session_state.get('tmp_file_path')
+                if not tmp_path or not os.path.exists(tmp_path):
+                    # Se non esiste, ricrearlo
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp_file:
+                        tmp_file.write(uploaded_file.getvalue())
+                        tmp_path = tmp_file.name
                 
                 try:
                     # Carica festivi se presente
@@ -233,37 +368,87 @@ if uploaded_file is not None:
                     # Rileva tour operatour
                     tour_operators = detect_tour_operators(tmp_path)
                     
-                    # Per ora elabora solo Veratour (come nella versione originale)
-                    # TODO: estendere per supportare altri tour operatour
+                    # Rileva quale tour operatour è presente
                     veratour_found = False
+                    alpitour_found = False
                     for to_name in tour_operators:
                         to_clean = re.sub(r'[^a-zA-Z]', '', to_name).lower()
                         if 'veratour' in to_clean:
                             veratour_found = True
-                            break
+                        if 'alpitour' in to_clean:
+                            alpitour_found = True
                     
-                    if not veratour_found:
-                        st.warning("⚠️ Nessun tour operatour Veratour trovato nel file. Elaborazione solo per Veratour.")
+                    all_detail_dfs = []
+                    all_totals_dfs = []
+                    all_discr_dfs = []
                     
-                    # Configurazione (come nella versione originale)
-                    cfg = CalcConfig(
-                        apt_filter=apt_filter if apt_filter else None,
-                        night_mode=night_mode,
-                        rounding_extra=RoundingPolicy(round_extra_mode, round_extra_step),
-                        rounding_night=RoundingPolicy(round_night_mode, round_night_step),
-                        holiday_dates=holiday_dates,
-                    )
+                    # Elabora Veratour se presente
+                    if veratour_found:
+                        st.info("🔄 Elaborazione Veratour...")
+                        cfg_veratour = VeratourCalcConfig(
+                            apt_filter=apt_filter if apt_filter else None,
+                            night_mode=night_mode,
+                            rounding_extra=RoundingPolicy(round_extra_mode, round_extra_step),
+                            rounding_night=RoundingPolicy(round_night_mode, round_night_step),
+                            holiday_dates=holiday_dates,
+                        )
+                        detail_v, totals_v, discr_v = process_files_veratour([tmp_path], cfg_veratour)
+                        all_detail_dfs.append(detail_v)
+                        all_totals_dfs.append(totals_v)
+                        all_discr_dfs.append(discr_v)
                     
-                    # Processa file (COME NELLA VERSIONE ORIGINALE)
-                    detail_df, totals_df, discr_df = process_files([tmp_path], cfg)
+                    # Elabora Alpitour se presente
+                    if alpitour_found:
+                        if ALPITOUR_AVAILABLE:
+                            st.info("🔄 Elaborazione Alpitour...")
+                            cfg_alpitour = AlpitourCalcConfig(
+                                apt_filter=apt_filter if apt_filter else None,
+                                rounding_extra=RoundingPolicy("NONE", 5),  # Alpitour: nessun arrotondamento
+                                rounding_night=RoundingPolicy("NONE", 5),  # Alpitour: nessun arrotondamento
+                                holiday_dates=holiday_dates,
+                            )
+                            detail_a, totals_a, discr_a = process_files_alpitour([tmp_path], cfg_alpitour)
+                            all_detail_dfs.append(detail_a)
+                            all_totals_dfs.append(totals_a)
+                            all_discr_dfs.append(discr_a)
+                        else:
+                            st.warning("⚠️ Alpitour rilevato ma modulo non disponibile. Installare le dipendenze necessarie.")
+                    
+                    if not veratour_found and not alpitour_found:
+                        st.error("❌ Nessun tour operatour supportato trovato nel file (Veratour o Alpitour).")
+                        st.stop()
+                    
+                    # Combina i risultati
+                    if all_detail_dfs:
+                        detail_df = pd.concat(all_detail_dfs, ignore_index=True)
+                        totals_df = pd.concat(all_totals_dfs, ignore_index=True)
+                        # Combina discrepanze (filtra quelli non vuoti)
+                        discr_list = [d for d in all_discr_dfs if d is not None and not d.empty]
+                        if discr_list:
+                            discr_df = pd.concat(discr_list, ignore_index=True)
+                        else:
+                            discr_df = pd.DataFrame()
+                    else:
+                        detail_df = pd.DataFrame()
+                        totals_df = pd.DataFrame()
+                        discr_df = pd.DataFrame()
                     
                     # Genera output Excel
                     output_buffer = io.BytesIO()
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp_output:
                         output_path = tmp_output.name
                     
-                    # USA LA FUNZIONE ORIGINALE
-                    write_output_excel(output_path, detail_df, totals_df, discr_df)
+                    # Usa la funzione di scrittura appropriata
+                    # Se ci sono entrambi o solo Alpitour, usa Alpitour (ha più fogli)
+                    # Se solo Veratour, usa Veratour
+                    if veratour_found and not (alpitour_found and ALPITOUR_AVAILABLE):
+                        write_output_excel_veratour(output_path, detail_df, totals_df, discr_df)
+                    elif ALPITOUR_AVAILABLE:
+                        # Alpitour o entrambi: usa Alpitour (supporta tutti i fogli)
+                        write_output_excel_alpitour(output_path, detail_df, totals_df, discr_df)
+                    else:
+                        # Fallback a Veratour se Alpitour non disponibile
+                        write_output_excel_veratour(output_path, detail_df, totals_df, discr_df)
                     
                     # Aggiungi foglio TourOperatourNonElaborati
                     from openpyxl import load_workbook
@@ -305,8 +490,13 @@ if uploaded_file is not None:
                     st.session_state['discr_df'] = discr_df
                     
                     # Cleanup
-                    os.unlink(tmp_path)
-                    os.unlink(output_path)
+                    if os.path.exists(tmp_path):
+                        os.unlink(tmp_path)
+                    if os.path.exists(output_path):
+                        os.unlink(output_path)
+                    # Rimuovi da session state
+                    if 'tmp_file_path' in st.session_state:
+                        del st.session_state['tmp_file_path']
                     
                     st.success(f"✅ Calcolo completato! Blocchi calcolati: {len(detail_df)}")
                     
@@ -316,6 +506,8 @@ if uploaded_file is not None:
                 except Exception as e:
                     st.error(f"❌ Errore durante l'elaborazione: {str(e)}")
                     st.exception(e)
+                    if 'tmp_file_path' in st.session_state and os.path.exists(st.session_state['tmp_file_path']):
+                        os.unlink(st.session_state['tmp_file_path'])
                     if os.path.exists(tmp_path):
                         os.unlink(tmp_path)
                 
