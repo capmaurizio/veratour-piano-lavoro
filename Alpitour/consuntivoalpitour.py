@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import argparse
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, date, time
 from typing import Dict, List, Optional, Tuple, Iterable
 
@@ -100,8 +100,8 @@ class CalcConfig:
     rate_extra_per_h: float = 20.0  # Alpitour 2025: €20,00/ora
     over_3h_rate_per_h: float = 15.0  # Alpitour 2025: €15,00/ora oltre le prime 3h
     night_eur_per_min: float = 0.0625  # Alpitour 2025: maggiorazione 15% = €3,75/h = €0,0625/min
-    rounding_extra: RoundingPolicy = RoundingPolicy("CEIL", 5)  # Alpitour: sempre arrotondamento per eccesso al multiplo di 5
-    rounding_night: RoundingPolicy = RoundingPolicy("NONE", 5)
+    rounding_extra: RoundingPolicy = field(default_factory=lambda: RoundingPolicy("NONE", 5))  # Alpitour: nessun arrotondamento
+    rounding_night: RoundingPolicy = field(default_factory=lambda: RoundingPolicy("NONE", 5))
     festivo_multiplier: float = 1.20  # Alpitour 2025: +20% su turno e extra
     holiday_dates: Optional[set[date]] = None  # optional external list
     extra_window_minutes: int = 30  # Alpitour: ATD + 30 minuti per calcolo extra
@@ -745,11 +745,11 @@ def validate_file_complete(file_path: str, to_keyword: str = "alpitour", apt_fil
                 sdf_filtered = sdf.copy()
             
             # Crea una config temporanea per la validazione
-            from dataclasses import dataclass
-            @dataclass
+            # Non usiamo dataclass qui per evitare problemi con default mutabili
             class TempConfig:
-                to_keyword: str = to_keyword
-                apt_filter: Optional[List[str]] = apt_filter
+                def __init__(self, to_keyword: str, apt_filter: Optional[List[str]]):
+                    self.to_keyword = to_keyword
+                    self.apt_filter = apt_filter
             
             temp_cfg = TempConfig(to_keyword=to_keyword, apt_filter=apt_filter)
             
