@@ -1461,18 +1461,36 @@ def create_assistenti_vrn_sheet(detail_df: pd.DataFrame) -> pd.DataFrame:
     rows_assistenti = []
     for _, row in df_vrn.iterrows():
         assistente = row['ASSISTENTE']
-        durata_min = int(row['DURATA_TURNO_MIN']) if pd.notna(row['DURATA_TURNO_MIN']) else 0
+        # Gestione durata_min con controllo tipo
+        durata_val = row.get('DURATA_TURNO_MIN', 0)
+        try:
+            durata_min = int(float(durata_val)) if pd.notna(durata_val) else 0
+        except (ValueError, TypeError):
+            durata_min = 0
+        
+        # Gestione extra_min con controllo tipo
         extra_min_val = row.get('EXTRA_MIN', 0)
-        extra_min = int(extra_min_val) if pd.notna(extra_min_val) else 0
-        # Usa RAW se disponibile, altrimenti NOTTE_MIN, gestendo NaN
+        try:
+            if pd.notna(extra_min_val):
+                extra_min = int(float(extra_min_val))
+            else:
+                extra_min = 0
+        except (ValueError, TypeError):
+            extra_min = 0
+        
+        # Usa RAW se disponibile, altrimenti NOTTE_MIN, gestendo NaN e tipo
         notte_min_raw = row.get('NOTTE_MIN_RAW')
         notte_min = row.get('NOTTE_MIN', 0)
-        if pd.notna(notte_min_raw):
-            minuti_notturni = int(notte_min_raw)
-        elif pd.notna(notte_min):
-            minuti_notturni = int(notte_min)
-        else:
+        try:
+            if pd.notna(notte_min_raw):
+                minuti_notturni = int(float(notte_min_raw))
+            elif pd.notna(notte_min):
+                minuti_notturni = int(float(notte_min))
+            else:
+                minuti_notturni = 0
+        except (ValueError, TypeError):
             minuti_notturni = 0
+        
         data_str = row['DATA']
         
         # Calcoli assistente
