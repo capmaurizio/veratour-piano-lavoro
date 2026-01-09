@@ -1,0 +1,54 @@
+DOMINA — Regole di calcolo (base 2h30)
+0) Tabelle di riferimento
+Pacchetto base = 2h30 (150 min)
+Base_€ per aeroporto
+BGY → €80,00
+VRN, BLQ → €85,00
+MXP, NAP, BRI, CTA, PMO, FCO → €90,00
+VCE, PSI → €100,00
+Extra
+€18,00/h = €0,30/min (calcolato sui minuti effettivi)
+Festivo
+Maggiorazione +30%
+Notturno
+Fascia 22:00–06:00
+Maggiorazione +20% sulla tariffa base (calcolo “puro”)
+1) Inizio assistenza
+START = STD − 2:30
+2) Durata base inclusa
+Base_min = 150
+Base_€ = valore da tabella in base all’aeroporto
+3) Durata effettiva e ore extra
+Durata_eff_min = minuti reali dall’inizio (START) alla fine reale (END)
+Extra_min = MAX(0; Durata_eff_min − 150)
+Extra_€ = Extra_min × (18/60)
+⇒ Extra_min × 0,30
+4) Notturno (22:00–06:00)
+4.1 Minuti notturni
+Notte_min = minuti dell’intervallo START → END che cadono tra 22:00 e 06:00
+(gestire il passaggio di mezzanotte: se serve, spezzare su due giorni)
+4.2 Tariffa notturna (regola “pura”)
+Tariffa_base_h = Base_€ / 2,5
+Notte_€/h = Tariffa_base_h × 20%
+Notte_€/min = Notte_€/h / 60
+4.3 Valore notturno
+Notte_€ = Notte_min × Notte_€/min
+5) Festivo (+30%)
+Se la data è festiva:
+Totale_€ = (Base_€ + Extra_€ + Notte_€ + Park_€) × 1,30
+Se NON festivo:
+Totale_€ = Base_€ + Extra_€ + Notte_€ + Park_€
+6) Spese parcheggio
+Park_€: da calcolare/aggiungere solo per NAP e BRI (voce separata da sommare).
+DOMINA — Importi notturni (calcolo “puro”)
+Questi sono i valori da usare/controllare:
+BGY (80€) → €6,40/h → €0,1067/min (≈ €0,11/min)
+VRN/BLQ (85€) → €6,80/h → €0,1133/min (≈ €0,11/min)
+MXP/NAP/BRI/CTA/PMO/FCO (90€) → €7,20/h → €0,1200/min (≈ €0,12/min)
+VCE/PSI (100€) → €8,00/h → €0,1333/min (≈ €0,13/min)
+Se vuoi, nel prossimo messaggio ti scrivo anche le formule Excel “copiaincolla” (con gestione mezzanotte) indicando solo che colonne usi per STD/START/END e APT
+ 
+
+
+ Parcheggio per Napoli un euro all'ora e per Bari 6 euro ogni 3 ore.
+ 

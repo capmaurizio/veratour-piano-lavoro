@@ -1461,9 +1461,18 @@ def create_assistenti_vrn_sheet(detail_df: pd.DataFrame) -> pd.DataFrame:
     rows_assistenti = []
     for _, row in df_vrn.iterrows():
         assistente = row['ASSISTENTE']
-        durata_min = int(row['DURATA_TURNO_MIN'])
-        extra_min = int(row.get('EXTRA_MIN', 0))
-        minuti_notturni = int(row.get('NOTTE_MIN_RAW', row.get('NOTTE_MIN', 0)))  # Usa RAW se disponibile
+        durata_min = int(row['DURATA_TURNO_MIN']) if pd.notna(row['DURATA_TURNO_MIN']) else 0
+        extra_min_val = row.get('EXTRA_MIN', 0)
+        extra_min = int(extra_min_val) if pd.notna(extra_min_val) else 0
+        # Usa RAW se disponibile, altrimenti NOTTE_MIN, gestendo NaN
+        notte_min_raw = row.get('NOTTE_MIN_RAW')
+        notte_min = row.get('NOTTE_MIN', 0)
+        if pd.notna(notte_min_raw):
+            minuti_notturni = int(notte_min_raw)
+        elif pd.notna(notte_min):
+            minuti_notturni = int(notte_min)
+        else:
+            minuti_notturni = 0
         data_str = row['DATA']
         
         # Calcoli assistente

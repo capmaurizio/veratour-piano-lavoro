@@ -1,0 +1,67 @@
+MICHELTOURS — Regole di calcolo (base 3h)
+0) Tabelle di riferimento
+Pacchetto base = 3h (180 min)
+Base_€ per aeroporto
+BGY → €85,00
+MXP, VCE → €90,00
+Extra
+€18,00/h = €0,30/min (sui minuti effettivi)
+Festivo
+Maggiorazione +30%
+Notturno
+Fascia 22:00–06:00
+Maggiorazione +20% sulla tariffa base (regola “pura”)
+1) Inizio assistenza
+Qui serve solo la regola operativa:
+START = (in base al vostro processo) orario di inizio reale / CVC / call time
+Se vuoi mantenerla identica a BAOBAB/DOMINA (inizio calcolato prima dello STD), dimmelo e la aggancio allo STD. Altrimenti: calcoli tutto da START a END effettivi.
+2) Durata base inclusa
+Base_min = 180
+Base_€ = valore da tabella in base all’aeroporto
+3) Durata effettiva e ore extra
+Durata_eff_min = minuti reali dall’inizio (START) alla fine reale (END)
+Extra_min = MAX(0; Durata_eff_min − 180)
+Extra_€ = Extra_min × (18/60)
+⇒ Extra_min × 0,30
+4) Notturno (22:00–06:00)
+4.1 Minuti notturni
+Notte_min = minuti dell’intervallo START → END che ricadono tra 22:00 e 06:00 (gestendo la mezzanotte)
+4.2 Tariffa notturna (regola “pura”)
+Tariffa_base_h = Base_€ / 3
+Notte_€/h = Tariffa_base_h × 20%
+Notte_€/min = Notte_€/h / 60
+4.3 Valore notturno
+Notte_€ = Notte_min × Notte_€/min
+5) Festivo (+30%)
+Se la data è festiva:
+Totale_€ = (Base_€ + Extra_€ + Notte_€) × 1,30
+Se NON festivo:
+Totale_€ = Base_€ + Extra_€ + Notte_€
+MICHELTOURS — Importi notturni (calcolo “puro”)
+BGY (85€ su 3h)
+Tariffa base = 85/3 = €28,333…/h
+Notte = 20% ⇒ €5,666…/h → €0,09444/min (≈ 0,095/min) ✅
+(in tabella è 5,67 e 0,095: allineato)
+MXP/VCE (90€ su 3h)
+Tariffa base = 90/3 = €30,00/h
+Notte = 20% ⇒ €6,00/h → €0,10/min
+·         MICHELTOURS — Tabella importi (base 3h)
+ 
+ 
+ 
+Gruppo APT
+Base (3h)
+Notturno €/h (20%)
+Notturno €/min
+BGY
+85,00 €
+5,67 €
+0,0944 (≈ 0,095)
+MXP, VCE
+90,00 €
+6,00 €
+0,1000 (≈ 0,10)
+Extra: 18,00 €/h = 0,30 €/min
+Festivo: (Base + Extra + Notturno) × 1,30
+Notturno: minuti in fascia 22:00–06:00 sull’intervallo reale START→END.
+ 

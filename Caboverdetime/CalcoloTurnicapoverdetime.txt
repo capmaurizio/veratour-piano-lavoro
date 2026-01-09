@@ -1,0 +1,69 @@
+CABOVERDETIME
+
+
+
+
+
+
+
+Assistenza per 3 ore. Ore extra da decollo schedulato
+85,00 €
+
+
+ore extra
+18,00 €
+
+
+tariffe festive
+maggiorazione 30%
+
+
+notturno (22:00-06:00)
+magg + 20%
+5,67
+0,095
+
+
+CABOVERDETIME — Regole di calcolo
+
+1. Quota base
+
+* Durata assistenza: 3 ore
+* Importo base: €85,00
+
+La quota base copre fino a 3 ore di assistenza e va calcolato dall'orario di CVC (convocazione) fino allo STD (stimato)
+
+2. Ore extra
+  Le ore extra decorrono dal decollo schedulato (STD) fino al ATD
+
+* Tariffa ore extra: €18,00/ora
+ Il calcolo è effettuato al minuto, proporzionalmente.
+
+3. Maggiorazione festiva
+  In caso di giornata festiva si applica una maggiorazione del 30% sull’importo totale:
+
+* Quota base
+* Eventuali ore extra
+* Eventuale notturno
+
+Formula:
+Totale_€ = (Base_€ + Extra_€ + Notturno_€) × 1,30
+
+4. Maggiorazione notturna
+  La maggiorazione notturna si applica nella fascia oraria 22:00–06:00.
+
+* Maggiorazione: +20%
+
+Valori di riferimento:
+
+* €5,67/ora
+* €0,095/minuto
+
+Il notturno è calcolato sui minuti effettivamente svolti nella fascia 22:00–06:00, gestendo correttamente il passaggio di mezzanotte.
+
+5. Riepilogo tariffe
+
+* Base (3 ore): €85,00
+* Ore extra: €18,00/ora
+* Notturno: €5,67/ora (€0,095/min)
+* Festivo: +30%

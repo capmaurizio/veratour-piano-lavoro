@@ -1,0 +1,143 @@
+RUSCONI — Regole di calcolo operative ed economiche
+
+Base 2h30 dall’orario di partenza STD
+
+1) Convocazione e inizio assistenza
+
+(Art. 2 – Modalità operative)
+
+Gli assistenti aeroportuali vengono convocati 2 ore e 30 minuti prima dell’orario schedulato di partenza (STD).
+
+START_ASSISTENZA = STD − 2:30
+
+👉 Questo è fisso, indipendente dall’aeroporto.
+
+2) Tariffa base per assistenza
+
+(Art. 3 – Tariffe)
+
+La tariffa è per singola assistenza / per volo e include la base di 2h30.
+
+Tutti gli scali nazionali → € 100,00
+
+Roma Fiumicino (FCO) e Venezia (VCE) → € 110,00
+
+👉 Non esistono scaglioni orari sulla base: è una quota fissa per volo.
+
+3) Ore di ritardo / ore extra
+
+(Art. 4 – Ore di ritardo)
+
+Le ore extra NON si calcolano sulla durata totale dell’assistenza, ma solo sul ritardo del volo rispetto allo STD.
+
+Extra_min = MAX(0 ; Orario_reale_decollo − STD)
+
+Tariffa extra = € 18,00 / ora
+
+Extra_€ = Extra_min × (18 / 60)
+
+→ € 0,30 al minuto
+
+📌 Se il volo parte in orario o in anticipo → extra = 0
+
+4) Maggiorazione notturna
+
+(Art. 5.1 – Tariffa notturna)
+
+Fascia notturna: 22:00 – 06:00
+
+Maggiorazione: +20%
+
+La maggiorazione si applica:
+
+✅ sull’importo dell’assistenza
+
+✅ sulle eventuali ore extra
+
+Formula operativa
+
+Notturno_€ = (Base_€ + Extra_€) × 20%
+
+(proporzionato ai minuti effettivi che ricadono nella fascia notturna)
+
+👉 Se vuoi il dettaglio al minuto in Excel:
+
+Notturno €/h = €7,20
+
+Notturno €/min = €0,12
+
+(valore coerente con 20% applicato)
+
+5) Maggiorazione festiva
+
+(Art. 5.2 – Festività)
+
+Nei seguenti giorni festivi si applica una maggiorazione del 30%:
+
+1 gennaio
+
+6 gennaio
+
+Pasqua e Pasquetta
+
+25 aprile
+
+1 maggio
+
+2 giugno
+
+4 ottobre
+
+15 agosto
+
+1 novembre
+
+8 dicembre
+
+25 dicembre (Natale)
+
+26 dicembre (Santo Stefano)
+
+Applicazione
+
+Festivo_€ = (Base_€ + Extra_€ + Notturno_€) × 30%
+
+6) Servizi accessori – Carte di imbarco
+
+(Art. 6 – Servizi accessori)
+
+Se richiesto il servizio di stampa e consegna documenti / carte di imbarco:
+
+Tariffe
+
+Fino a 20 passeggeri
+
+→ € 0,18 per documento
+
+Oltre 20 passeggeri
+
+→ € 0,25 per documento
+
+👉 Interpretazione corretta (a soglia):
+
+se N ≤ 20 → tutte a 0,18
+
+se N > 20 → tutte a 0,25
+
+(se vuoi invece lo scaglione misto, lo adattiamo, ma il testo contrattuale supporta la soglia)
+
+7) Totale finale (logica Excel)
+
+Giorno NON festivo
+
+Totale = Base_€ + Extra_€ + Notturno_€ + Carte_€
+
+Giorno festivo
+
+Totale = (Base_€ + Extra_€ + Notturno_€ + Carte_€) × 1,30
+
+In una frase (versione “da controllo”)
+
+Rusconi paga una quota fissa per volo (100€ / 110€), convoca 2h30 prima dello STD, riconosce solo il ritardo reale come extra a 18€/h, applica notturno +20% e festivo +30%, e fattura le carte imbarco a pezzo.
+
+ 

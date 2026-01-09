@@ -15,13 +15,28 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Set
 import re
 
-# Aggiungi Veratour e Alpitour al path per import
+# Aggiungi Veratour, Alpitour, Domina, MichelTours, SAND, Caboverdetime e Rusconi al path per import
 veratour_path = os.path.join(os.path.dirname(__file__), 'Veratour')
 alpitour_path = os.path.join(os.path.dirname(__file__), 'Alpitour')
+domina_path = os.path.join(os.path.dirname(__file__), 'Domina')
+micheltours_path = os.path.join(os.path.dirname(__file__), 'MICHELTOURS')
+sand_path = os.path.join(os.path.dirname(__file__), ' Sand')
+caboverdetime_path = os.path.join(os.path.dirname(__file__), 'Caboverdetime')
+rusconi_path = os.path.join(os.path.dirname(__file__), 'Rusconi')
 if veratour_path not in sys.path:
     sys.path.insert(0, veratour_path)
 if alpitour_path not in sys.path:
     sys.path.insert(0, alpitour_path)
+if domina_path not in sys.path:
+    sys.path.insert(0, domina_path)
+if micheltours_path not in sys.path:
+    sys.path.insert(0, micheltours_path)
+if sand_path not in sys.path:
+    sys.path.insert(0, sand_path)
+if caboverdetime_path not in sys.path:
+    sys.path.insert(0, caboverdetime_path)
+if rusconi_path not in sys.path:
+    sys.path.insert(0, rusconi_path)
 
 from consuntivoveratour import (
     CalcConfig as VeratourCalcConfig,
@@ -47,10 +62,75 @@ except ImportError as e:
     write_output_excel_alpitour = None
     validate_file_alpitour = None
 
+try:
+    from consuntivodomina import (
+        CalcConfig as DominaCalcConfig,
+        process_files as process_files_domina,
+        write_output_excel as write_output_excel_domina,
+    )
+    DOMINA_AVAILABLE = True
+except ImportError as e:
+    DOMINA_AVAILABLE = False
+    DominaCalcConfig = None
+    process_files_domina = None
+    write_output_excel_domina = None
+
+try:
+    from consuntivocaboverdetime import (
+        CalcConfig as CaboverdetimeCalcConfig,
+        process_files as process_files_caboverdetime,
+        write_output_excel as write_output_excel_caboverdetime,
+    )
+    CABOVERDETIME_AVAILABLE = True
+except ImportError as e:
+    CABOVERDETIME_AVAILABLE = False
+    CaboverdetimeCalcConfig = None
+    process_files_caboverdetime = None
+    write_output_excel_caboverdetime = None
+
+try:
+    from consuntivorusconi import (
+        CalcConfig as RusconiCalcConfig,
+        process_files as process_files_rusconi,
+        write_output_excel as write_output_excel_rusconi,
+    )
+    RUSCONI_AVAILABLE = True
+except ImportError as e:
+    RUSCONI_AVAILABLE = False
+    RusconiCalcConfig = None
+    process_files_rusconi = None
+    write_output_excel_rusconi = None
+
+try:
+    from consuntivomicheltours import (
+        CalcConfig as MichelToursCalcConfig,
+        process_files as process_files_micheltours,
+        write_output_excel as write_output_excel_micheltours,
+    )
+    MICHELTOURS_AVAILABLE = True
+except ImportError as e:
+    MICHELTOURS_AVAILABLE = False
+    MichelToursCalcConfig = None
+    process_files_micheltours = None
+    write_output_excel_micheltours = None
+
+try:
+    from consuntivosand import (
+        CalcConfig as SandCalcConfig,
+        process_files as process_files_sand,
+        write_output_excel as write_output_excel_sand,
+    )
+    SAND_AVAILABLE = True
+except ImportError as e:
+    SAND_AVAILABLE = False
+    SandCalcConfig = None
+    process_files_sand = None
+    write_output_excel_sand = None
+
 # Configurazione pagina
 st.set_page_config(
     page_title="Calcolo Piano Lavoro - Multi-Tour Operatour",
-    page_icon="📊",
+    page_icon=None,
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -65,11 +145,89 @@ st.markdown("""
         text-align: center;
         margin-bottom: 2rem;
     }
+    .login-container {
+        max-width: 450px;
+        margin: 80px auto;
+        padding: 40px;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        background-color: #ffffff;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .login-title {
+        font-size: 1.8rem;
+        font-weight: 600;
+        color: #1f77b4;
+        text-align: center;
+        margin-bottom: 10px;
+        letter-spacing: 1px;
+    }
+    .login-subtitle {
+        font-size: 0.95rem;
+        color: #666;
+        text-align: center;
+        margin-bottom: 30px;
+    }
+    .company-name {
+        font-size: 1.2rem;
+        font-weight: 500;
+        color: #333;
+        text-align: center;
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid #e0e0e0;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-# Header
-st.markdown('<div class="main-header">📊 Calcolo Piano Lavoro - Multi-Tour Operatour</div>', unsafe_allow_html=True)
+# Credenziali di accesso
+VALID_USERNAME = "skypemiao"
+VALID_PASSWORD = "jfjdljf3244a?091"
+
+# Inizializza session_state per autenticazione
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+
+def check_credentials(username: str, password: str) -> bool:
+    """Verifica le credenziali di accesso"""
+    return username == VALID_USERNAME and password == VALID_PASSWORD
+
+def login_page():
+    """Mostra la pagina di login"""
+    st.markdown('<div class="login-container">', unsafe_allow_html=True)
+    st.markdown('<div class="login-title">Accesso Protetto</div>', unsafe_allow_html=True)
+    st.markdown('<div class="login-subtitle">Inserisci le credenziali per accedere all\'applicazione</div>', unsafe_allow_html=True)
+    
+    with st.form("login_form"):
+        username = st.text_input("Username", placeholder="Inserisci username")
+        password = st.text_input("Password", type="password", placeholder="Inserisci password")
+        submit_button = st.form_submit_button("Accedi", use_container_width=True)
+        
+        if submit_button:
+            if check_credentials(username, password):
+                st.session_state.authenticated = True
+                st.success("Accesso autorizzato")
+                st.rerun()
+            else:
+                st.error("Username o password non corretti. Riprova.")
+    
+    st.markdown('<div class="company-name">Scay Bergamo</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# Controllo autenticazione
+if not st.session_state.authenticated:
+    login_page()
+    st.stop()
+
+# Header (mostrato solo se autenticato)
+st.markdown('<div class="main-header">Calcolo Piano Lavoro - Multi-Tour Operatour</div>', unsafe_allow_html=True)
+
+# Bottone logout nella sidebar
+with st.sidebar:
+    st.markdown("---")
+    if st.button("Logout", use_container_width=True):
+        st.session_state.authenticated = False
+        st.rerun()
 
 
 def normalize_cols(df: pd.DataFrame) -> pd.DataFrame:
@@ -184,7 +342,7 @@ with st.sidebar:
     )
 
 # Area principale
-st.markdown("### 📁 Carica File Excel del Piano di Lavoro")
+st.markdown("### Carica File Excel del Piano di Lavoro")
 
 uploaded_file = st.file_uploader(
     "Seleziona il file Excel",
@@ -212,7 +370,7 @@ if uploaded_file is not None:
             tour_operators = detect_tour_operators(tmp_path)
             
             if tour_operators:
-                st.info(f"📋 Tour operatour rilevati: {', '.join(sorted(tour_operators))}")
+                st.info(f"Tour operatour rilevati: {', '.join(sorted(tour_operators))}")
                 
                 available_folders = {}
                 missing_tour_operators = []
@@ -225,10 +383,10 @@ if uploaded_file is not None:
                         missing_tour_operators.append(to_name)
                 
             if available_folders:
-                st.success(f"✅ Tour operatour con calcolo disponibile: {', '.join(available_folders.keys())}")
+                st.success(f"Tour operatour con calcolo disponibile: {', '.join(available_folders.keys())}")
             
             if missing_tour_operators:
-                st.warning(f"⚠️ Tour operatour senza cartella (non elaborati): {', '.join(missing_tour_operators)}")
+                st.warning(f"Tour operatour senza cartella (non elaborati): {', '.join(missing_tour_operators)}")
         finally:
             pass  # Manteniamo tmp_path per la validazione
     
@@ -269,6 +427,51 @@ if uploaded_file is not None:
                         "error": str(e)
                     }
             
+            # Validazione per Domina
+            if 'domina' in [to.lower() for to in tour_operators]:
+                try:
+                    st.info("🔍 Validazione Domina...")
+                    validation_results['domina'] = {
+                        "status": "ok",
+                        "tour_operators": [to for to in tour_operators if 'domina' in to.lower()],
+                        "note": "Domina rilevato - pronto per calcolo"
+                    }
+                except Exception as e:
+                    validation_results['domina'] = {
+                        "status": "error",
+                        "error": str(e)
+                    }
+            
+            # Validazione per MichelTours
+            if 'micheltours' in [to.lower() for to in tour_operators] or 'michel tours' in [to.lower() for to in tour_operators]:
+                try:
+                    st.info("🔍 Validazione MichelTours...")
+                    validation_results['micheltours'] = {
+                        "status": "ok",
+                        "tour_operators": [to for to in tour_operators if 'micheltours' in to.lower() or 'michel tours' in to.lower()],
+                        "note": "MichelTours rilevato - pronto per calcolo"
+                    }
+                except Exception as e:
+                    validation_results['micheltours'] = {
+                        "status": "error",
+                        "error": str(e)
+                    }
+            
+            # Validazione per SAND
+            if 'sand' in [to.lower() for to in tour_operators]:
+                try:
+                    st.info("🔍 Validazione SAND...")
+                    validation_results['sand'] = {
+                        "status": "ok",
+                        "tour_operators": [to for to in tour_operators if 'sand' in to.lower()],
+                        "note": "SAND rilevato - pronto per calcolo"
+                    }
+                except Exception as e:
+                    validation_results['sand'] = {
+                        "status": "error",
+                        "error": str(e)
+                    }
+            
             st.session_state['validation_results'] = validation_results
             st.session_state['last_file'] = uploaded_file.name
     
@@ -277,14 +480,14 @@ if uploaded_file is not None:
     
     if validation_results:
         for to_name, result in validation_results.items():
-            with st.expander(f"📊 Risultati Validazione - {to_name.upper()}", expanded=True):
+            with st.expander(f"Risultati Validazione - {to_name.upper()}", expanded=True):
                 if isinstance(result, dict) and 'status' in result:
                     if result['status'] == 'ok':
-                        st.success(f"✅ {to_name.upper()}: Validazione completata")
+                        st.success(f"{to_name.upper()}: Validazione completata")
                         if 'tour_operators' in result:
                             st.info(f"Tour operatour: {', '.join(result['tour_operators'])}")
                     else:
-                        st.error(f"❌ {to_name.upper()}: {result.get('error', 'Errore sconosciuto')}")
+                        st.error(f"{to_name.upper()}: {result.get('error', 'Errore sconosciuto')}")
                 else:
                     # Risultato completo da validate_file_complete
                     col1, col2, col3 = st.columns(3)
@@ -303,26 +506,26 @@ if uploaded_file is not None:
                     
                     # Colonne trovate/mancanti
                     if result.get('colonne_trovate'):
-                        st.success("✅ Colonne trovate:")
+                        st.success("Colonne trovate:")
                         for key, val in result['colonne_trovate'].items():
                             st.write(f"  - {key}: {val}")
                     
                     if result.get('colonne_mancanti'):
-                        st.warning("⚠️ Colonne mancanti (opzionali):")
+                        st.warning("Colonne mancanti (opzionali):")
                         for col in result['colonne_mancanti']:
                             st.write(f"  - {col}")
                     
                     # Tour operatour e aeroporti
                     if result.get('tour_operators_trovati'):
-                        st.info(f"📋 Tour operatour: {', '.join(result['tour_operators_trovati'])}")
+                        st.info(f"Tour operatour: {', '.join(result['tour_operators_trovati'])}")
                     
                     if result.get('aeroporti_trovati'):
                         st.info(f"✈️ Aeroporti: {', '.join(result['aeroporti_trovati'])}")
                     
                     # Errori
                     if result.get('righe_con_errori'):
-                        st.error(f"❌ Righe con errori: {len(result['righe_con_errori'])}")
-                        with st.expander("📋 Dettaglio Errori (prime 10)", expanded=False):
+                        st.error(f"Righe con errori: {len(result['righe_con_errori'])}")
+                        with st.expander("Dettaglio Errori (prime 10)", expanded=False):
                             for err in result['righe_con_errori'][:10]:
                                 st.write(f"**Foglio {err['foglio']}, Riga {err['riga']}** ({err.get('data', 'N/A')} - {err.get('apt', 'N/A')}): {err['errore']}")
                             if len(result['righe_con_errori']) > 10:
@@ -330,7 +533,7 @@ if uploaded_file is not None:
                     
                     # Fogli validati
                     if result.get('fogli_validati'):
-                        st.info("📄 Fogli validati:")
+                        st.info("Fogli validati:")
                         for foglio in result['fogli_validati']:
                             st.write(f"  - {foglio['foglio']}: {foglio['righe_totali']} righe totali, {foglio['righe_con_errori']} con errori")
     
@@ -340,9 +543,9 @@ if uploaded_file is not None:
     
     # Pulsante per eseguire il calcolo
     st.markdown("---")
-    st.markdown("### 🚀 Esegui Calcolo")
+    st.markdown("### Esegui Calcolo")
     
-    if st.button("🚀 Esegui Calcolo", type="primary", use_container_width=True):
+    if st.button("Esegui Calcolo", type="primary", use_container_width=True):
         with st.spinner("⏳ Elaborazione in corso..."):
             try:
                 # Usa il file temporaneo già creato durante la validazione
@@ -371,12 +574,27 @@ if uploaded_file is not None:
                     # Rileva quale tour operatour è presente
                     veratour_found = False
                     alpitour_found = False
+                    domina_found = False
+                    micheltours_found = False
+                    sand_found = False
+                    caboverdetime_found = False
+                    rusconi_found = False
                     for to_name in tour_operators:
                         to_clean = re.sub(r'[^a-zA-Z]', '', to_name).lower()
                         if 'veratour' in to_clean:
                             veratour_found = True
                         if 'alpitour' in to_clean:
                             alpitour_found = True
+                        if 'domina' in to_clean:
+                            domina_found = True
+                        if 'micheltours' in to_clean or 'michel tours' in to_clean:
+                            micheltours_found = True
+                        if 'sand' in to_clean:
+                            sand_found = True
+                        if 'caboverdetime' in to_clean:
+                            caboverdetime_found = True
+                        if 'rusconi' in to_clean:
+                            rusconi_found = True
                     
                     all_detail_dfs = []
                     all_totals_dfs = []
@@ -384,7 +602,7 @@ if uploaded_file is not None:
                     
                     # Elabora Veratour se presente
                     if veratour_found:
-                        st.info("🔄 Elaborazione Veratour...")
+                        st.info("Elaborazione Veratour...")
                         cfg_veratour = VeratourCalcConfig(
                             apt_filter=apt_filter if apt_filter else None,
                             night_mode=night_mode,
@@ -400,7 +618,7 @@ if uploaded_file is not None:
                     # Elabora Alpitour se presente
                     if alpitour_found:
                         if ALPITOUR_AVAILABLE:
-                            st.info("🔄 Elaborazione Alpitour...")
+                            st.info("Elaborazione Alpitour...")
                             cfg_alpitour = AlpitourCalcConfig(
                                 apt_filter=apt_filter if apt_filter else None,
                                 rounding_extra=RoundingPolicy("NONE", 5),  # Alpitour: nessun arrotondamento
@@ -412,10 +630,95 @@ if uploaded_file is not None:
                             all_totals_dfs.append(totals_a)
                             all_discr_dfs.append(discr_a)
                         else:
-                            st.warning("⚠️ Alpitour rilevato ma modulo non disponibile. Installare le dipendenze necessarie.")
+                            st.warning("Alpitour rilevato ma modulo non disponibile. Installare le dipendenze necessarie.")
                     
-                    if not veratour_found and not alpitour_found:
-                        st.error("❌ Nessun tour operatour supportato trovato nel file (Veratour o Alpitour).")
+                    # Elabora Domina se presente
+                    if domina_found:
+                        if DOMINA_AVAILABLE:
+                            st.info("Elaborazione Domina...")
+                            cfg_domina = DominaCalcConfig(
+                                apt_filter=apt_filter if apt_filter else None,
+                                rounding_extra=RoundingPolicy("NONE", 5),  # Domina: nessun arrotondamento
+                                rounding_night=RoundingPolicy("NONE", 5),  # Domina: nessun arrotondamento
+                                holiday_dates=holiday_dates,
+                            )
+                            detail_d, totals_d, discr_d = process_files_domina([tmp_path], cfg_domina)
+                            all_detail_dfs.append(detail_d)
+                            all_totals_dfs.append(totals_d)
+                            all_discr_dfs.append(discr_d)
+                        else:
+                            st.warning("Domina rilevato ma modulo non disponibile. Installare le dipendenze necessarie.")
+                    
+                    # Elabora MichelTours se presente
+                    if micheltours_found:
+                        if MICHELTOURS_AVAILABLE:
+                            st.info("Elaborazione MichelTours...")
+                            cfg_micheltours = MichelToursCalcConfig(
+                                apt_filter=apt_filter if apt_filter else None,
+                                rounding_extra=RoundingPolicy("NONE", 5),  # MichelTours: nessun arrotondamento
+                                rounding_night=RoundingPolicy("NONE", 5),  # MichelTours: nessun arrotondamento
+                                holiday_dates=holiday_dates,
+                            )
+                            detail_mt, totals_mt, discr_mt = process_files_micheltours([tmp_path], cfg_micheltours)
+                            all_detail_dfs.append(detail_mt)
+                            all_totals_dfs.append(totals_mt)
+                            all_discr_dfs.append(discr_mt)
+                        else:
+                            st.warning("MichelTours rilevato ma modulo non disponibile. Installare le dipendenze necessarie.")
+                    
+                    # Elabora SAND se presente
+                    if sand_found:
+                        if SAND_AVAILABLE:
+                            st.info("Elaborazione SAND...")
+                            cfg_sand = SandCalcConfig(
+                                apt_filter=apt_filter if apt_filter else None,
+                                rounding_extra=RoundingPolicy("NONE", 5),  # SAND: nessun arrotondamento
+                                rounding_night=RoundingPolicy("NONE", 5),  # SAND: nessun arrotondamento
+                                holiday_dates=holiday_dates,
+                            )
+                            detail_s, totals_s, discr_s = process_files_sand([tmp_path], cfg_sand)
+                            all_detail_dfs.append(detail_s)
+                            all_totals_dfs.append(totals_s)
+                            all_discr_dfs.append(discr_s)
+                        else:
+                            st.warning("SAND rilevato ma modulo non disponibile. Installare le dipendenze necessarie.")
+                    
+                    # Elabora Caboverdetime se presente
+                    if caboverdetime_found:
+                        if CABOVERDETIME_AVAILABLE:
+                            st.info("Elaborazione Caboverdetime...")
+                            cfg_caboverdetime = CaboverdetimeCalcConfig(
+                                apt_filter=apt_filter if apt_filter else None,
+                                rounding_extra=RoundingPolicy("NONE", 5),  # Caboverdetime: nessun arrotondamento
+                                rounding_night=RoundingPolicy("NONE", 5),  # Caboverdetime: nessun arrotondamento
+                                holiday_dates=holiday_dates,
+                            )
+                            detail_ct, totals_ct, discr_ct = process_files_caboverdetime([tmp_path], cfg_caboverdetime)
+                            all_detail_dfs.append(detail_ct)
+                            all_totals_dfs.append(totals_ct)
+                            all_discr_dfs.append(discr_ct)
+                        else:
+                            st.warning("Caboverdetime rilevato ma modulo non disponibile. Installare le dipendenze necessarie.")
+                    
+                    # Elabora Rusconi se presente
+                    if rusconi_found:
+                        if RUSCONI_AVAILABLE:
+                            st.info("Elaborazione Rusconi...")
+                            cfg_rusconi = RusconiCalcConfig(
+                                apt_filter=apt_filter if apt_filter else None,
+                                rounding_extra=RoundingPolicy("NONE", 5),  # Rusconi: nessun arrotondamento
+                                rounding_night=RoundingPolicy("NONE", 5),  # Rusconi: nessun arrotondamento
+                                holiday_dates=holiday_dates,
+                            )
+                            detail_r, totals_r, discr_r = process_files_rusconi([tmp_path], cfg_rusconi)
+                            all_detail_dfs.append(detail_r)
+                            all_totals_dfs.append(totals_r)
+                            all_discr_dfs.append(discr_r)
+                        else:
+                            st.warning("Rusconi rilevato ma modulo non disponibile. Installare le dipendenze necessarie.")
+                    
+                    if not veratour_found and not alpitour_found and not domina_found and not micheltours_found and not sand_found and not caboverdetime_found and not rusconi_found:
+                        st.error("Nessun tour operatour supportato trovato nel file (Veratour, Alpitour, Domina, MichelTours, SAND, Caboverdetime o Rusconi).")
                         st.stop()
                     
                     # Combina i risultati
@@ -439,15 +742,29 @@ if uploaded_file is not None:
                         output_path = tmp_output.name
                     
                     # Usa la funzione di scrittura appropriata
-                    # Se ci sono entrambi o solo Alpitour, usa Alpitour (ha più fogli)
-                    # Se solo Veratour, usa Veratour
-                    if veratour_found and not (alpitour_found and ALPITOUR_AVAILABLE):
-                        write_output_excel_veratour(output_path, detail_df, totals_df, discr_df)
-                    elif ALPITOUR_AVAILABLE:
-                        # Alpitour o entrambi: usa Alpitour (supporta tutti i fogli)
+                    # Se ci sono più tour operator, usa Alpitour (supporta tutti i fogli e gestisce meglio i dati combinati)
+                    # Altrimenti usa la funzione specifica del tour operator trovato
+                    num_tour_operators = sum([veratour_found, alpitour_found, domina_found, micheltours_found, sand_found, caboverdetime_found, rusconi_found])
+                    
+                    if num_tour_operators > 1 and ALPITOUR_AVAILABLE:
+                        # Più tour operator: usa Alpitour (supporta tutti i fogli e gestisce meglio i dati combinati)
                         write_output_excel_alpitour(output_path, detail_df, totals_df, discr_df)
+                    elif sand_found and SAND_AVAILABLE:
+                        write_output_excel_sand(output_path, detail_df, totals_df, discr_df)
+                    elif rusconi_found and RUSCONI_AVAILABLE:
+                        write_output_excel_rusconi(output_path, detail_df, totals_df, discr_df)
+                    elif caboverdetime_found and CABOVERDETIME_AVAILABLE:
+                        write_output_excel_caboverdetime(output_path, detail_df, totals_df, discr_df)
+                    elif micheltours_found and MICHELTOURS_AVAILABLE:
+                        write_output_excel_micheltours(output_path, detail_df, totals_df, discr_df)
+                    elif domina_found and DOMINA_AVAILABLE:
+                        write_output_excel_domina(output_path, detail_df, totals_df, discr_df)
+                    elif alpitour_found and ALPITOUR_AVAILABLE:
+                        write_output_excel_alpitour(output_path, detail_df, totals_df, discr_df)
+                    elif veratour_found:
+                        write_output_excel_veratour(output_path, detail_df, totals_df, discr_df)
                     else:
-                        # Fallback a Veratour se Alpitour non disponibile
+                        # Fallback a Veratour se nessun altro disponibile
                         write_output_excel_veratour(output_path, detail_df, totals_df, discr_df)
                     
                     # Aggiungi foglio TourOperatourNonElaborati
@@ -498,13 +815,13 @@ if uploaded_file is not None:
                     if 'tmp_file_path' in st.session_state:
                         del st.session_state['tmp_file_path']
                     
-                    st.success(f"✅ Calcolo completato! Blocchi calcolati: {len(detail_df)}")
+                    st.success(f"Calcolo completato! Blocchi calcolati: {len(detail_df)}")
                     
                     if not discr_df.empty:
-                        st.warning(f"⚠️ Discrepanze rilevate: {len(discr_df)} (vedi sezione Discrepanze)")
+                        st.warning(f"Discrepanze rilevate: {len(discr_df)} (vedi sezione Discrepanze)")
                     
                 except Exception as e:
-                    st.error(f"❌ Errore durante l'elaborazione: {str(e)}")
+                    st.error(f"Errore durante l'elaborazione: {str(e)}")
                     st.exception(e)
                     if 'tmp_file_path' in st.session_state and os.path.exists(st.session_state['tmp_file_path']):
                         os.unlink(st.session_state['tmp_file_path'])
@@ -512,13 +829,13 @@ if uploaded_file is not None:
                         os.unlink(tmp_path)
                 
             except Exception as e:
-                st.error(f"❌ Errore: {str(e)}")
+                st.error(f"Errore: {str(e)}")
                 st.exception(e)
     
     # Mostra risultati se disponibili (COME NELLA VERSIONE ORIGINALE)
     if 'output_file' in st.session_state and st.session_state['output_file'] is not None:
         st.markdown("---")
-        st.markdown("### 📊 Risultati")
+        st.markdown("### Risultati")
         
         st.download_button(
             label="📥 Scarica File Excel Completo",
@@ -529,16 +846,16 @@ if uploaded_file is not None:
         )
         
         if 'totals_df' in st.session_state and not st.session_state['totals_df'].empty:
-            st.markdown("#### 📈 Totali per Aeroporto")
+            st.markdown("#### Totali per Aeroporto")
             totals_display = st.session_state['totals_df'].copy()
             st.dataframe(totals_display, use_container_width=True, hide_index=True)
         
         if 'detail_df' in st.session_state and not st.session_state['detail_df'].empty:
-            with st.expander("📋 Anteprima Dettaglio Blocchi (prime 20 righe)", expanded=False):
+            with st.expander("Anteprima Dettaglio Blocchi (prime 20 righe)", expanded=False):
                 st.dataframe(st.session_state['detail_df'].head(20), use_container_width=True)
         
         if 'discr_df' in st.session_state and not st.session_state['discr_df'].empty:
-            with st.expander("⚠️ Discrepanze Rilevate", expanded=True):
+            with st.expander("Discrepanze Rilevate", expanded=True):
                 st.dataframe(st.session_state['discr_df'], use_container_width=True)
                 st.info("Le discrepanze indicano possibili inconsistenze nei dati di input. Controlla il file Excel generato per i dettagli completi.")
         
@@ -548,7 +865,7 @@ if uploaded_file is not None:
             if 'ASSISTENTE' in df_detail.columns and 'APT' in df_detail.columns:
                 df_vrn = df_detail[(df_detail['APT'] == 'VRN') & (df_detail['ASSISTENTE'].notna()) & (df_detail['ASSISTENTE'] != '')].copy()
                 if not df_vrn.empty:
-                    with st.expander("👥 Dettaglio Giorno per Giorno - Assistenti VRN", expanded=True):
+                    with st.expander("Dettaglio Giorno per Giorno - Assistenti VRN", expanded=True):
                         assistenti_list = sorted(df_vrn['ASSISTENTE'].unique())
                         selected_assistente = st.selectbox(
                             "Seleziona Assistente",
@@ -592,7 +909,7 @@ if uploaded_file is not None:
                             st.dataframe(display_df, use_container_width=True, hide_index=True)
                             
                             # Totali
-                            st.markdown(f"**📊 Totali per {selected_assistente}:**")
+                            st.markdown(f"**Totali per {selected_assistente}:**")
                             col1, col2, col3, col4 = st.columns(4)
                             with col1:
                                 st.metric("Turno", f"{df_assistente['TURNO_EUR'].sum():.2f}€")

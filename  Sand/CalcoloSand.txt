@@ -1,0 +1,163 @@
+REGOLE DI CALCOLO SAND
+
+SAND — Regole di calcolo
+(Base 2h30, nessuna ora extra)
+
+═══════════════════════════════════════════════════════════════════════════════
+0) PARAMETRI FISSI
+═══════════════════════════════════════════════════════════════════════════════
+
+Durata base: 2h30 = 150 minuti
+Ore extra: NON previste
+→ Extra_min = 0 (sempre)
+→ Extra_€ = 0 (sempre)
+
+Maggiorazione festiva: +30%
+Maggiorazione notturna: +20% nella fascia 22:00–03:59
+
+Quote base per aeroporto:
+• BGY → €65,00
+• VRN, BLQ, NAP → €70,00
+• FCO → €77,00
+• VCE → €75,00
+
+Tariffa notturna (€/min):
+• BGY → €0,09/min (€5,40/h)
+• VRN, BLQ, NAP, FCO, VCE → €0,10/min (€6,00/h)
+
+═══════════════════════════════════════════════════════════════════════════════
+1) INIZIO ASSISTENZA
+═══════════════════════════════════════════════════════════════════════════════
+
+L'orario di inizio assistenza è calcolato come:
+START = STD − 2h30
+
+Nota: La colonna TURNO nel file di input NON viene utilizzata per il calcolo.
+      Viene utilizzata solo per riferimento e per identificare eventuali note.
+
+═══════════════════════════════════════════════════════════════════════════════
+2) QUOTA BASE
+═══════════════════════════════════════════════════════════════════════════════
+
+La quota base è fissa e determinata esclusivamente dall'aeroporto di riferimento:
+Base_€ = importo da tabella SAND (vedi sezione 0)
+
+═══════════════════════════════════════════════════════════════════════════════
+3) ORE EXTRA
+═══════════════════════════════════════════════════════════════════════════════
+
+Per il servizio SAND NON sono previste ore extra.
+Anche se la durata reale dell'assistenza supera le 2h30:
+Extra_min = 0
+Extra_€ = 0
+
+═══════════════════════════════════════════════════════════════════════════════
+4) MAGGIORAZIONE NOTTURNA (22:00–03:59)
+═══════════════════════════════════════════════════════════════════════════════
+
+Regole aggiornate e valide da gennaio 2026.
+
+4.1) COLONNA CONVOCAZIONE (CVC)
+───────────────────────────────────────────────────────────────────────────────
+Nel file di input (Piano Lavoro) deve essere presente la colonna CONVOCAZIONE
+(o "CONV.NE" o "CVC") che contiene l'orario di convocazione dell'assistente.
+
+Questa colonna è OBBLIGATORIA per il calcolo del notturno.
+
+4.2) INTERVALLO VALIDO PER IL CALCOLO
+───────────────────────────────────────────────────────────────────────────────
+Il calcolo del notturno deve tenere conto dell'orario effettivo di convocazione (CVC).
+
+L'intervallo di assistenza considerato per il calcolo del notturno è:
+• START = orario di convocazione (CVC) dalla colonna CONVOCAZIONE
+• END = orario nella colonna STD
+
+IMPORTANTE:
+• Le fasce notturne precedenti al CVC NON devono essere considerate
+• Il notturno decorre esclusivamente dall'orario di convocazione (CVC)
+• Minuti notturni precedenti al CVC non sono mai conteggiabili, anche se 
+  rientrano nella fascia 22:00–03:59
+
+4.3) FINESTRA NOTTURNA
+───────────────────────────────────────────────────────────────────────────────
+La finestra notturna è: 22:00–03:59
+
+Nota tecnica:
+• Per semplicità operativa la fascia notturna può essere trattata come [22:00, 04:00)
+• Questo è equivalente a "fino alle 03:59" (escludendo 04:00)
+
+4.4) MINUTI NOTTURNI
+───────────────────────────────────────────────────────────────────────────────
+I minuti notturni sono calcolati come i minuti dell'intervallo:
+START (CVC) → END (STD)
+che ricadono nella fascia 22:00–03:59, gestendo correttamente il passaggio di mezzanotte.
+
+Esempio:
+• CVC = 02:40
+• STD = 05:10
+• Intervallo notturno: da 02:40 a 03:59
+• Minuti notturni = 80 minuti (20 min da 02:40 a 02:59 + 60 min da 03:00 a 03:59)
+
+4.5) VALORE DEL NOTTURNO
+───────────────────────────────────────────────────────────────────────────────
+Notte_€ = Notte_min × tariffa notturna al minuto
+
+La tariffa notturna è definita dalla tabella SAND in base all'aeroporto (vedi sezione 0).
+
+═══════════════════════════════════════════════════════════════════════════════
+5) FESTIVO
+═══════════════════════════════════════════════════════════════════════════════
+
+Se il servizio cade in giorno festivo:
+Totale_€ = (Base_€ + Notte_€) × 1,30
+
+Se NON festivo:
+Totale_€ = Base_€ + Notte_€
+
+Nota: SAND non ha extra, quindi il festivo si applica solo su Base + Notturno.
+
+═══════════════════════════════════════════════════════════════════════════════
+6) SPESE DI PARCHEGGIO
+═══════════════════════════════════════════════════════════════════════════════
+
+Per il servizio SAND NON sono previste spese di parcheggio.
+
+═══════════════════════════════════════════════════════════════════════════════
+7) ESEMPIO PRATICO
+═══════════════════════════════════════════════════════════════════════════════
+
+Dati di input:
+• Aeroporto: BGY
+• Data: 21/12/2025 (non festivo)
+• CONVOCAZIONE (CVC): 02:40
+• STD: 05:10
+• TURNO: 2:30-5:30 (non utilizzato per il calcolo)
+
+Calcolo:
+1) START assistenza = STD − 2h30 = 05:10 − 2h30 = 02:40
+2) Base_€ = €65,00 (BGY)
+3) Extra_min = 0, Extra_€ = 0 (SAND non ha extra)
+4) Notturno:
+   • Intervallo: da CVC (02:40) a STD (05:10)
+   • Minuti nella fascia 22:00–03:59:
+     - Da 02:40 a 02:59 = 20 minuti
+     - Da 03:00 a 03:59 = 60 minuti
+     - Totale: 80 minuti
+   • Notte_€ = 80 min × €0,09/min = €7,20
+5) Festivo: NO → nessuna maggiorazione
+6) Totale_€ = Base_€ + Notte_€ = €65,00 + €7,20 = €72,20
+
+Risultato finale:
+• Base: €65,00
+• Notturno: €7,20 (80 min)
+• TOTALE: €72,20
+
+═══════════════════════════════════════════════════════════════════════════════
+NOTE TECNICHE
+═══════════════════════════════════════════════════════════════════════════════
+
+• La colonna CONVOCAZIONE (o "CONV.NE" o "CVC") è obbligatoria nel file di input
+• La colonna TURNO non viene utilizzata per il calcolo, solo per riferimento
+• Il calcolo del notturno usa CVC come START e STD come END
+• La finestra notturna è 22:00–03:59 (escludendo 04:00)
+• Non ci sono ore extra per SAND, indipendentemente dalla durata reale
