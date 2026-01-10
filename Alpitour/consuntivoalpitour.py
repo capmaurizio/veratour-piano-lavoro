@@ -1139,10 +1139,15 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
         minutes = int(minutes)
         return f"{minutes // 60}:{minutes % 60:02d}"
 
-    # Raggruppa per TOUR OPERATOR e PERIODO se TOUR OPERATOR è presente
+    # Raggruppa per AGENZIA, TOUR OPERATOR e PERIODO se presenti
     groupby_cols = ["PERIODO"]
+    if "AGENZIA" in detail_df.columns:
+        groupby_cols = ["AGENZIA", "PERIODO"]
     if "TOUR OPERATOR" in detail_df.columns:
-        groupby_cols = ["TOUR OPERATOR", "PERIODO"]
+        if "AGENZIA" in detail_df.columns:
+            groupby_cols = ["AGENZIA", "TOUR OPERATOR", "PERIODO"]
+        else:
+            groupby_cols = ["TOUR OPERATOR", "PERIODO"]
     
     totals = detail_df.groupby(groupby_cols, as_index=False).agg(
         TOT_TURNO_EUR=("TURNO_EUR", "sum"),
@@ -1156,21 +1161,22 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
     totals["TOT_EXTRA_H:MM"] = totals["TOT_EXTRA_MIN"].apply(sum_hmm)
     
     # Riordina colonne
-    if "TOUR OPERATOR" in totals.columns:
-        totals = totals[[
-            "TOUR OPERATOR", "PERIODO", "TOT_TURNO_EUR", "TOT_EXTRA_MIN", "TOT_EXTRA_H:MM", "TOT_EXTRA_EUR",
-            "TOT_NOTTE_MIN", "TOT_NOTTE_EUR", "TOT_TOTALE_EUR"
-        ]]
+    base_cols = ["TOT_TURNO_EUR", "TOT_EXTRA_MIN", "TOT_EXTRA_H:MM", "TOT_EXTRA_EUR",
+                 "TOT_NOTTE_MIN", "TOT_NOTTE_EUR", "TOT_TOTALE_EUR"]
+    if "AGENZIA" in totals.columns and "TOUR OPERATOR" in totals.columns:
+        totals = totals[["AGENZIA", "TOUR OPERATOR", "PERIODO"] + base_cols]
+    elif "AGENZIA" in totals.columns:
+        totals = totals[["AGENZIA", "PERIODO"] + base_cols]
+    elif "TOUR OPERATOR" in totals.columns:
+        totals = totals[["TOUR OPERATOR", "PERIODO"] + base_cols]
     else:
-        totals = totals[[
-            "PERIODO", "TOT_TURNO_EUR", "TOT_EXTRA_MIN", "TOT_EXTRA_H:MM", "TOT_EXTRA_EUR",
-            "TOT_NOTTE_MIN", "TOT_NOTTE_EUR", "TOT_TOTALE_EUR"
-        ]]
+        totals = totals[["PERIODO"] + base_cols]
 
     # Riga totale mese
+    agenzia_val = detail_df["AGENZIA"].iloc[0] if "AGENZIA" in detail_df.columns else ""
     tour_operator_val = detail_df["TOUR OPERATOR"].iloc[0] if "TOUR OPERATOR" in detail_df.columns else ""
-    month_row = pd.DataFrame([{
-        "TOUR OPERATOR": tour_operator_val if "TOUR OPERATOR" in detail_df.columns else "",
+    
+    month_row_dict = {
         "PERIODO": "MESE",
         "TOT_TURNO_EUR": float(detail_df["TURNO_EUR"].sum()),
         "TOT_EXTRA_MIN": int(detail_df["EXTRA_MIN"].sum()),
@@ -1179,11 +1185,24 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
         "TOT_NOTTE_MIN": int(detail_df["NOTTE_MIN"].sum()),
         "TOT_NOTTE_EUR": float(detail_df["NOTTE_EUR"].sum()),
         "TOT_TOTALE_EUR": float(detail_df["TOTALE_BLOCCO_EUR"].sum()),
-    }])
+    }
     
-    # Se TOUR OPERATOR non è nel month_row ma è nelle colonne, aggiungilo
-    if "TOUR OPERATOR" not in month_row.columns and "TOUR OPERATOR" in totals.columns:
-        month_row.insert(0, "TOUR OPERATOR", tour_operator_val)
+    # Aggiungi AGENZIA e TOUR OPERATOR se presenti
+    if "AGENZIA" in totals.columns:
+        month_row_dict = {"AGENZIA": agenzia_val, **month_row_dict}
+    if "TOUR OPERATOR" in totals.columns:
+        if "AGENZIA" in totals.columns:
+            # Inserisci TOUR OPERATOR dopo AGENZIA
+            new_dict = {"AGENZIA": month_row_dict["AGENZIA"]}
+            new_dict["TOUR OPERATOR"] = tour_operator_val
+            for k, v in month_row_dict.items():
+                if k != "AGENZIA":
+                    new_dict[k] = v
+            month_row_dict = new_dict
+        else:
+            month_row_dict = {"TOUR OPERATOR": tour_operator_val, **month_row_dict}
+    
+    month_row = pd.DataFrame([month_row_dict])
 
     totals_df = pd.concat([totals, month_row], ignore_index=True)
 
@@ -1222,6 +1241,7 @@ def create_apt_detail_sheet(df_apt: pd.DataFrame) -> pd.DataFrame:
     # Create output DataFrame
     output_cols = {
         'Data': df_apt['DATA'],
+        'Agenzia': df_apt['AGENZIA'].fillna('') if 'AGENZIA' in df_apt.columns else pd.Series([''] * len(df_apt)),
         'Tour Operator': df_apt['TOUR OPERATOR'].fillna('') if 'TOUR OPERATOR' in df_apt.columns else pd.Series([''] * len(df_apt)),
         'Turno': df_apt['TURNO_NORMALIZZATO'],
         'Durata': df_apt['DURATA_H:MM'],
@@ -1237,10 +1257,11 @@ def create_apt_detail_sheet(df_apt: pd.DataFrame) -> pd.DataFrame:
     if 'ASSISTENTE' in df_apt.columns:
         # Rebuild dict with Assistente in the right position
         new_cols = {'Data': output_cols['Data']}
+        new_cols['Agenzia'] = output_cols['Agenzia']
         new_cols['Tour Operator'] = output_cols['Tour Operator']
         new_cols['Assistente'] = df_apt['ASSISTENTE'].fillna('')
         for k, v in output_cols.items():
-            if k not in ['Data', 'Tour Operator']:
+            if k not in ['Data', 'Agenzia', 'Tour Operator']:
                 new_cols[k] = v
         output_cols = new_cols
     
@@ -1249,6 +1270,7 @@ def create_apt_detail_sheet(df_apt: pd.DataFrame) -> pd.DataFrame:
     # Add total row
     total_row_dict = {
         'Data': 'TOTALE',
+        'Agenzia': '',
         'Tour Operator': '',
         'Turno': '',
         'Durata': '',
@@ -1263,10 +1285,11 @@ def create_apt_detail_sheet(df_apt: pd.DataFrame) -> pd.DataFrame:
     # Add empty Assistente in total row if column exists (insert after Tour Operator)
     if 'ASSISTENTE' in df_apt.columns:
         new_total_dict = {'Data': total_row_dict['Data']}
+        new_total_dict['Agenzia'] = total_row_dict['Agenzia']
         new_total_dict['Tour Operator'] = total_row_dict['Tour Operator']
         new_total_dict['Assistente'] = ''
         for k, v in total_row_dict.items():
-            if k not in ['Data', 'Tour Operator']:
+            if k not in ['Data', 'Agenzia', 'Tour Operator']:
                 new_total_dict[k] = v
         total_row_dict = new_total_dict
     
@@ -1281,10 +1304,15 @@ def create_total_by_apt_sheet(detail_df: pd.DataFrame) -> pd.DataFrame:
     if detail_df.empty:
         return pd.DataFrame(columns=['Tour Operator', 'Aeroporto', 'Blocchi', 'Assistenze', 'Extra', 'Notturno', 'TOTALE'])
     
-    # Group by airport (e tour operator se presente)
+    # Group by airport (e tour operator se presente, e agenzia se presente)
     groupby_cols = ['APT']
+    if 'AGENZIA' in detail_df.columns:
+        groupby_cols = ['AGENZIA', 'APT']
     if 'TOUR OPERATOR' in detail_df.columns:
-        groupby_cols = ['TOUR OPERATOR', 'APT']
+        if 'AGENZIA' in detail_df.columns:
+            groupby_cols = ['AGENZIA', 'TOUR OPERATOR', 'APT']
+        else:
+            groupby_cols = ['TOUR OPERATOR', 'APT']
     
     totals_by_apt = detail_df.groupby(groupby_cols).agg({
         'TURNO_EUR': 'sum',
@@ -1325,15 +1353,37 @@ def create_total_by_apt_sheet(detail_df: pd.DataFrame) -> pd.DataFrame:
     
     # Estrai indici
     if isinstance(totals_by_apt.index, pd.MultiIndex):
-        # MultiIndex: (TOUR OPERATOR, APT)
-        tour_operators = [idx[0] for idx in totals_by_apt.index]
-        aeroporti = [idx[1] for idx in totals_by_apt.index]
+        # MultiIndex: può essere (AGENZIA, TOUR OPERATOR, APT), (AGENZIA, APT), o (TOUR OPERATOR, APT)
+        if len(totals_by_apt.index.names) == 3:
+            # (AGENZIA, TOUR OPERATOR, APT)
+            agenzie = [idx[0] for idx in totals_by_apt.index]
+            tour_operators = [idx[1] for idx in totals_by_apt.index]
+            aeroporti = [idx[2] for idx in totals_by_apt.index]
+        elif len(totals_by_apt.index.names) == 2:
+            # Può essere (AGENZIA, APT) o (TOUR OPERATOR, APT)
+            if 'AGENZIA' in totals_by_apt.index.names:
+                # (AGENZIA, APT)
+                agenzie = [idx[0] for idx in totals_by_apt.index]
+                tour_operators = [''] * len(totals_by_apt)
+                aeroporti = [idx[1] for idx in totals_by_apt.index]
+            else:
+                # (TOUR OPERATOR, APT)
+                agenzie = [''] * len(totals_by_apt)
+                tour_operators = [idx[0] for idx in totals_by_apt.index]
+                aeroporti = [idx[1] for idx in totals_by_apt.index]
+        else:
+            # Fallback
+            agenzie = [''] * len(totals_by_apt)
+            tour_operators = [''] * len(totals_by_apt)
+            aeroporti = totals_by_apt.index.tolist()
     else:
         # Single Index: solo APT
+        agenzie = [''] * len(totals_by_apt)
         tour_operators = [''] * len(totals_by_apt)
         aeroporti = totals_by_apt.index.tolist()
     
     result = pd.DataFrame({
+        'Agenzia': agenzie,
         'Tour Operator': tour_operators,
         'Aeroporto': aeroporti,
         'Blocchi': block_counts.values,
@@ -1350,6 +1400,7 @@ def create_total_by_apt_sheet(detail_df: pd.DataFrame) -> pd.DataFrame:
     
     # Format columns
     output_df = pd.DataFrame({
+        'Agenzia': result['Agenzia'],
         'Tour Operator': result['Tour Operator'],
         'Aeroporto': result['Aeroporto'],
         'Blocchi': result['Blocchi'],
@@ -1359,13 +1410,20 @@ def create_total_by_apt_sheet(detail_df: pd.DataFrame) -> pd.DataFrame:
         'TOTALE': result['TOTALE'].apply(format_eur),
     })
     
-    # Order by tour operator, then airport (VRN, BGY, NAP, VCE)
+    # Order by agenzia, tour operator, then airport (VRN, BGY, NAP, VCE)
     order = ['VRN', 'BGY', 'NAP', 'VCE']
     output_df['sort_order'] = output_df['Aeroporto'].apply(lambda x: order.index(x) if x in order else 999)
-    output_df = output_df.sort_values(['Tour Operator', 'sort_order']).drop('sort_order', axis=1)
+    sort_cols = []
+    if 'Agenzia' in output_df.columns:
+        sort_cols.append('Agenzia')
+    if 'Tour Operator' in output_df.columns:
+        sort_cols.append('Tour Operator')
+    sort_cols.append('sort_order')
+    output_df = output_df.sort_values(sort_cols).drop('sort_order', axis=1)
     
     # Add total row
     total_row = pd.DataFrame([{
+        'Agenzia': '',
         'Tour Operator': '',
         'Aeroporto': 'TOTALE',
         'Blocchi': output_df['Blocchi'].sum(),
@@ -1601,7 +1659,7 @@ def write_output_excel(output_path: str, detail_df: pd.DataFrame, totals_df: pd.
         # Order columns for readability
         if not detail_df.empty:
             cols = [
-                "DATA", "APT", "TOUR OPERATOR", "ASSISTENTE", "TURNO_FFILL", "TURNO_NORMALIZZATO",
+                "DATA", "APT", "AGENZIA", "TOUR OPERATOR", "ASSISTENTE", "TURNO_FFILL", "TURNO_NORMALIZZATO",
                 "INIZIO_DT", "FINE_DT", "DURATA_TURNO_MIN", "NO_DEC",
                 "ATD_SCELTO",
                 "TURNO_EUR",

@@ -15,9 +15,11 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Set
 import re
 
-# Aggiungi Veratour, Alpitour, Domina, MichelTours, SAND, Caboverdetime e Rusconi al path per import
+# Aggiungi Veratour, Alpitour, Aliservice, Baobab, Domina, MichelTours, SAND, Caboverdetime e Rusconi al path per import
 veratour_path = os.path.join(os.path.dirname(__file__), 'Veratour')
 alpitour_path = os.path.join(os.path.dirname(__file__), 'Alpitour')
+aliservice_path = os.path.join(os.path.dirname(__file__), 'Aliservice')
+baobab_path = os.path.join(os.path.dirname(__file__), 'Baobab')
 domina_path = os.path.join(os.path.dirname(__file__), 'Domina')
 micheltours_path = os.path.join(os.path.dirname(__file__), 'MICHELTOURS')
 sand_path = os.path.join(os.path.dirname(__file__), ' Sand')
@@ -27,6 +29,10 @@ if veratour_path not in sys.path:
     sys.path.insert(0, veratour_path)
 if alpitour_path not in sys.path:
     sys.path.insert(0, alpitour_path)
+if aliservice_path not in sys.path:
+    sys.path.insert(0, aliservice_path)
+if baobab_path not in sys.path:
+    sys.path.insert(0, baobab_path)
 if domina_path not in sys.path:
     sys.path.insert(0, domina_path)
 if micheltours_path not in sys.path:
@@ -61,6 +67,32 @@ except ImportError as e:
     process_files_alpitour = None
     write_output_excel_alpitour = None
     validate_file_alpitour = None
+
+try:
+    from consuntivoaliservice import (
+        CalcConfig as AliserviceCalcConfig,
+        process_files as process_files_aliservice,
+        write_output_excel as write_output_excel_aliservice,
+    )
+    ALISERVICE_AVAILABLE = True
+except ImportError as e:
+    ALISERVICE_AVAILABLE = False
+    AliserviceCalcConfig = None
+    process_files_aliservice = None
+    write_output_excel_aliservice = None
+
+try:
+    from consuntivobaobab import (
+        CalcConfig as BaobabCalcConfig,
+        process_files as process_files_baobab,
+        write_output_excel as write_output_excel_baobab,
+    )
+    BAOBAB_AVAILABLE = True
+except ImportError as e:
+    BAOBAB_AVAILABLE = False
+    BaobabCalcConfig = None
+    process_files_baobab = None
+    write_output_excel_baobab = None
 
 try:
     from consuntivodomina import (
@@ -132,7 +164,7 @@ st.set_page_config(
     page_title="Calcolo Piano Lavoro - Multi-Tour Operatour",
     page_icon=None,
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 # CSS personalizzato
@@ -144,6 +176,10 @@ st.markdown("""
         color: #1f77b4;
         text-align: center;
         margin-bottom: 2rem;
+        margin-top: 1rem;
+    }
+    .logout-button-container {
+        margin-bottom: 1rem;
     }
     .login-container {
         max-width: 450px;
@@ -220,14 +256,15 @@ if not st.session_state.authenticated:
     st.stop()
 
 # Header (mostrato solo se autenticato)
-st.markdown('<div class="main-header">Calcolo Piano Lavoro - Multi-Tour Operatour</div>', unsafe_allow_html=True)
-
-# Bottone logout nella sidebar
-with st.sidebar:
-    st.markdown("---")
-    if st.button("Logout", use_container_width=True):
+# Pulsante Logout in alto al centro
+st.markdown('<div class="logout-button-container"></div>', unsafe_allow_html=True)
+col1, col2, col3 = st.columns([1, 1, 1])
+with col2:
+    if st.button("Logout", use_container_width=True, type="secondary"):
         st.session_state.authenticated = False
         st.rerun()
+
+st.markdown('<div class="main-header">Calcolo Piano Lavoro - Multi-Tour Operatour</div>', unsafe_allow_html=True)
 
 
 def normalize_cols(df: pd.DataFrame) -> pd.DataFrame:
@@ -247,9 +284,15 @@ def find_col(df: pd.DataFrame, patterns: List[str]) -> Optional[str]:
     return None
 
 
-def detect_tour_operators(file_path: str) -> Set[str]:
-    """Rileva tutti i tour operatour unici dal file Excel"""
+def detect_tour_operators(file_path: str) -> Tuple[Set[str], Set[str]]:
+    """
+    Rileva tutti i tour operatour unici dal file Excel
+    Returns: (tour_operators, aliservice_managed_tour_operators)
+    - tour_operators: tutti i tour operator rilevati dalla colonna TOUR OPERATOR
+    - aliservice_managed_tour_operators: tour operator gestiti da Aliservice (hanno AGENZIA=Aliservice)
+    """
     tour_operators = set()
+    aliservice_managed = set()
     
     try:
         xls = pd.ExcelFile(file_path)
@@ -259,22 +302,41 @@ def detect_tour_operators(file_path: str) -> Set[str]:
                 continue
             
             df = normalize_cols(df)
-            to_col = find_col(df, [r"TOUR\s*OPERATOR", r"^TO$", r"OPERATORE"])
             
+            # Rileva TOUR OPERATOR
+            to_col = find_col(df, [r"TOUR\s*OPERATOR", r"^TO$", r"OPERATORE"])
             if to_col:
                 unique_values = df[to_col].dropna().astype(str).str.strip()
                 unique_values = unique_values[unique_values != ""]
                 unique_values = unique_values[unique_values.str.lower() != "nan"]
                 unique_values = unique_values[unique_values.str.lower() != "none"]
                 tour_operators.update(unique_values.unique())
+            
+            # Rileva AGENZIA per Aliservice e i tour operator che gestisce
+            agenzia_col = find_col(df, [r"^AGENZIA$", r"\bAGENCY\b"])
+            if agenzia_col and to_col:
+                # Trova righe dove AGENZIA contiene "Aliservice"
+                mask_aliservice = df[agenzia_col].astype(str).str.contains(r"aliservice", case=False, na=False)
+                if mask_aliservice.any():
+                    # Aggiungi i tour operator gestiti da Aliservice
+                    aliservice_rows = df[mask_aliservice]
+                    if to_col in aliservice_rows.columns:
+                        managed_tos = aliservice_rows[to_col].dropna().astype(str).str.strip()
+                        managed_tos = managed_tos[managed_tos != ""]
+                        managed_tos = managed_tos[managed_tos.str.lower() != "nan"]
+                        managed_tos = managed_tos[managed_tos.str.lower() != "none"]
+                        aliservice_managed.update(managed_tos.unique())
     except Exception as e:
         st.warning(f"Errore nel rilevare tour operatour: {str(e)}")
     
-    return tour_operators
+    return tour_operators, aliservice_managed
 
 
 def find_tour_operator_folder(to_name: str, base_path: str = ".") -> Optional[str]:
-    """Cerca la cartella del tour operatour nella root"""
+    """
+    Cerca la cartella del tour operatour nella root e verifica che contenga un file consuntivo*.py
+    Returns: path della cartella se trovata e contiene consuntivo*.py, None altrimenti
+    """
     to_clean = re.sub(r'[^a-zA-Z]', '', to_name).lower()
     
     if os.path.exists(base_path):
@@ -283,63 +345,53 @@ def find_tour_operator_folder(to_name: str, base_path: str = ".") -> Optional[st
             if os.path.isdir(item_path):
                 item_clean = re.sub(r'[^a-zA-Z]', '', item).lower()
                 if item_clean == to_clean or to_clean in item_clean or item_clean in to_clean:
-                    return item_path
+                    # Verifica che la cartella contenga un file consuntivo*.py
+                    if os.path.exists(item_path):
+                        for file in os.listdir(item_path):
+                            if file.startswith('consuntivo') and file.endswith('.py'):
+                                return item_path
     
     return None
 
 
-# Sidebar con opzioni avanzate
-with st.sidebar:
-    st.header("⚙️ Opzioni di Calcolo")
+def get_tour_operator_module_name(to_name: str) -> Optional[str]:
+    """
+    Restituisce il nome normalizzato del tour operator per il matching con i moduli
+    Gestisce casi speciali come Baobab/TH, MichelTours, ecc.
+    """
+    to_clean = re.sub(r'[^a-zA-Z]', '', to_name).lower()
     
-    apt_filter = st.multiselect(
-        "Filtra Aeroporti (opzionale)",
-        options=["VRN", "BGY", "NAP", "VCE"],
-        help="Seleziona gli aeroporti da includere. Lascia vuoto per includere tutti."
-    )
+    # Casi speciali
+    if 'baobab' in to_clean or to_clean == 'th':
+        return 'baobab'
+    elif 'micheltours' in to_clean or 'michel tours' in to_clean:
+        return 'micheltours'
+    elif 'aliservice' in to_clean:
+        return 'aliservice'
+    elif 'caboverdetime' in to_clean:
+        return 'caboverdetime'
+    elif 'sand' in to_clean:
+        return 'sand'
+    elif 'rusconi' in to_clean:
+        return 'rusconi'
+    elif 'domina' in to_clean:
+        return 'domina'
+    elif 'alpitour' in to_clean:
+        return 'alpitour'
+    elif 'veratour' in to_clean:
+        return 'veratour'
     
-    # Opzioni Veratour
-    st.subheader("Opzioni Veratour")
-    night_mode = st.selectbox(
-        "Modalità Notturno (Veratour)",
-        options=["DIFF5", "FULL30"],
-        index=0,
-        help="DIFF5: Maggiorazione differenziale (€5/h). FULL30: Tariffa piena (€30/h)."
-    )
-    
-    st.subheader("Arrotondamenti (Veratour)")
-    
-    round_extra_mode = st.selectbox(
-        "Arrotondamento Extra (Veratour)",
-        options=["NONE", "FLOOR", "CEIL", "NEAREST"],
-        index=0
-    )
-    round_extra_step = st.number_input(
-        "Step Arrotondamento Extra (minuti)",
-        min_value=1,
-        value=5,
-        step=1
-    )
-    
-    round_night_mode = st.selectbox(
-        "Arrotondamento Notturno (Veratour)",
-        options=["NONE", "FLOOR", "CEIL", "NEAREST"],
-        index=0
-    )
-    round_night_step = st.number_input(
-        "Step Arrotondamento Notturno (minuti)",
-        min_value=1,
-        value=5,
-        step=1
-    )
-    
-    st.info("ℹ️ Alpitour: Nessun arrotondamento (valori esatti)")
-    
-    holiday_file = st.file_uploader(
-        "File Festivi (opzionale)",
-        type=["txt", "csv"],
-        help="File con lista festivi (una data per riga, formato YYYY-MM-DD)"
-    )
+    return to_clean
+
+
+# Valori di default per le opzioni di calcolo (precedentemente nella sidebar)
+apt_filter = []  # Nessun filtro per default
+night_mode = "DIFF5"  # Default per Veratour
+round_extra_mode = "NONE"  # Nessun arrotondamento per default
+round_extra_step = 5
+round_night_mode = "NONE"  # Nessun arrotondamento per default
+round_night_step = 5
+holiday_file = None  # Nessun file festivi per default
 
 # Area principale
 st.markdown("### Carica File Excel del Piano di Lavoro")
@@ -367,15 +419,33 @@ if uploaded_file is not None:
             tmp_path = tmp_file.name
         
         try:
-            tour_operators = detect_tour_operators(tmp_path)
+            tour_operators, aliservice_managed = detect_tour_operators(tmp_path)
             
-            if tour_operators:
-                st.info(f"Tour operatour rilevati: {', '.join(sorted(tour_operators))}")
+            # Verifica se Aliservice è disponibile (se ci sono tour operator gestiti da Aliservice)
+            aliservice_available = False
+            if aliservice_managed:
+                # Verifica se esiste la cartella Aliservice
+                aliservice_folder = find_tour_operator_folder("Aliservice")
+                if aliservice_folder:
+                    aliservice_available = True
+            
+            # Crea lista completa: tutti i tour operator rilevati + Aliservice se disponibile
+            all_tour_operators = set(tour_operators)
+            if aliservice_available:
+                all_tour_operators.add("ALISERVICE")
+            
+            if all_tour_operators:
+                st.info(f"Tour operatour rilevati: {', '.join(sorted(all_tour_operators))}")
                 
                 available_folders = {}
                 missing_tour_operators = []
                 
-                for to_name in tour_operators:
+                # Per ogni tour operator, verifica se esiste la cartella di calcolo
+                for to_name in sorted(all_tour_operators):
+                    # Skip i tour operator gestiti da Aliservice (sono gestiti da Aliservice)
+                    if to_name in aliservice_managed and aliservice_available:
+                        continue
+                    
                     folder_path = find_tour_operator_folder(to_name)
                     if folder_path:
                         available_folders[to_name] = folder_path
@@ -383,159 +453,12 @@ if uploaded_file is not None:
                         missing_tour_operators.append(to_name)
                 
             if available_folders:
-                st.success(f"Tour operatour con calcolo disponibile: {', '.join(available_folders.keys())}")
+                st.success(f"Tour operatour con calcolo disponibile: {', '.join(sorted(available_folders.keys()))}")
             
             if missing_tour_operators:
-                st.warning(f"Tour operatour senza cartella (non elaborati): {', '.join(missing_tour_operators)}")
+                st.warning(f"Tour operatour senza cartella (non elaborati): {', '.join(sorted(missing_tour_operators))}")
         finally:
-            pass  # Manteniamo tmp_path per la validazione
-    
-    # VALIDAZIONE COMPLETA DEL FILE PRIMA DEL CALCOLO
-    st.markdown("---")
-    st.markdown("### 🔍 Validazione File")
-    
-    if 'validation_results' not in st.session_state or st.session_state.get('last_file') != uploaded_file.name:
-        with st.spinner("⏳ Validazione file in corso..."):
-            validation_results = {}
-            
-            # Validazione per Veratour
-            if 'veratour' in [to.lower() for to in tour_operators]:
-                try:
-                    # Crea una funzione di validazione per Veratour (simile ad Alpitour)
-                    # Per ora usiamo la stessa logica di rilevamento
-                    st.info("🔍 Validazione Veratour...")
-                    validation_results['veratour'] = {
-                        "status": "ok",
-                        "tour_operators": [to for to in tour_operators if 'veratour' in to.lower()],
-                        "note": "Veratour rilevato - pronto per calcolo"
-                    }
-                except Exception as e:
-                    validation_results['veratour'] = {
-                        "status": "error",
-                        "error": str(e)
-                    }
-            
-            # Validazione per Alpitour
-            if ALPITOUR_AVAILABLE and validate_file_alpitour and 'alpitour' in [to.lower() for to in tour_operators]:
-                try:
-                    st.info("🔍 Validazione Alpitour...")
-                    result_alpitour = validate_file_alpitour(tmp_path, to_keyword="alpitour", apt_filter=apt_filter if apt_filter else None)
-                    validation_results['alpitour'] = result_alpitour
-                except Exception as e:
-                    validation_results['alpitour'] = {
-                        "status": "error",
-                        "error": str(e)
-                    }
-            
-            # Validazione per Domina
-            if 'domina' in [to.lower() for to in tour_operators]:
-                try:
-                    st.info("🔍 Validazione Domina...")
-                    validation_results['domina'] = {
-                        "status": "ok",
-                        "tour_operators": [to for to in tour_operators if 'domina' in to.lower()],
-                        "note": "Domina rilevato - pronto per calcolo"
-                    }
-                except Exception as e:
-                    validation_results['domina'] = {
-                        "status": "error",
-                        "error": str(e)
-                    }
-            
-            # Validazione per MichelTours
-            if 'micheltours' in [to.lower() for to in tour_operators] or 'michel tours' in [to.lower() for to in tour_operators]:
-                try:
-                    st.info("🔍 Validazione MichelTours...")
-                    validation_results['micheltours'] = {
-                        "status": "ok",
-                        "tour_operators": [to for to in tour_operators if 'micheltours' in to.lower() or 'michel tours' in to.lower()],
-                        "note": "MichelTours rilevato - pronto per calcolo"
-                    }
-                except Exception as e:
-                    validation_results['micheltours'] = {
-                        "status": "error",
-                        "error": str(e)
-                    }
-            
-            # Validazione per SAND
-            if 'sand' in [to.lower() for to in tour_operators]:
-                try:
-                    st.info("🔍 Validazione SAND...")
-                    validation_results['sand'] = {
-                        "status": "ok",
-                        "tour_operators": [to for to in tour_operators if 'sand' in to.lower()],
-                        "note": "SAND rilevato - pronto per calcolo"
-                    }
-                except Exception as e:
-                    validation_results['sand'] = {
-                        "status": "error",
-                        "error": str(e)
-                    }
-            
-            st.session_state['validation_results'] = validation_results
-            st.session_state['last_file'] = uploaded_file.name
-    
-    # Mostra risultati validazione
-    validation_results = st.session_state.get('validation_results', {})
-    
-    if validation_results:
-        for to_name, result in validation_results.items():
-            with st.expander(f"Risultati Validazione - {to_name.upper()}", expanded=True):
-                if isinstance(result, dict) and 'status' in result:
-                    if result['status'] == 'ok':
-                        st.success(f"{to_name.upper()}: Validazione completata")
-                        if 'tour_operators' in result:
-                            st.info(f"Tour operatour: {', '.join(result['tour_operators'])}")
-                    else:
-                        st.error(f"{to_name.upper()}: {result.get('error', 'Errore sconosciuto')}")
-                else:
-                    # Risultato completo da validate_file_complete
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
-                        st.metric("Righe Totali", result.get('righe_totali', 0))
-                        st.metric("Righe con Errori", len(result.get('righe_con_errori', [])))
-                    
-                    with col2:
-                        st.metric("Tour Operatour", len(result.get('tour_operators_trovati', [])))
-                        st.metric("Aeroporti", len(result.get('aeroporti_trovati', [])))
-                    
-                    with col3:
-                        st.metric("Date Trovate", len(result.get('date_trovate', [])))
-                        st.metric("Fogli Validati", len(result.get('fogli_validati', [])))
-                    
-                    # Colonne trovate/mancanti
-                    if result.get('colonne_trovate'):
-                        st.success("Colonne trovate:")
-                        for key, val in result['colonne_trovate'].items():
-                            st.write(f"  - {key}: {val}")
-                    
-                    if result.get('colonne_mancanti'):
-                        st.warning("Colonne mancanti (opzionali):")
-                        for col in result['colonne_mancanti']:
-                            st.write(f"  - {col}")
-                    
-                    # Tour operatour e aeroporti
-                    if result.get('tour_operators_trovati'):
-                        st.info(f"Tour operatour: {', '.join(result['tour_operators_trovati'])}")
-                    
-                    if result.get('aeroporti_trovati'):
-                        st.info(f"✈️ Aeroporti: {', '.join(result['aeroporti_trovati'])}")
-                    
-                    # Errori
-                    if result.get('righe_con_errori'):
-                        st.error(f"Righe con errori: {len(result['righe_con_errori'])}")
-                        with st.expander("Dettaglio Errori (prime 10)", expanded=False):
-                            for err in result['righe_con_errori'][:10]:
-                                st.write(f"**Foglio {err['foglio']}, Riga {err['riga']}** ({err.get('data', 'N/A')} - {err.get('apt', 'N/A')}): {err['errore']}")
-                            if len(result['righe_con_errori']) > 10:
-                                st.write(f"... e altri {len(result['righe_con_errori']) - 10} errori")
-                    
-                    # Fogli validati
-                    if result.get('fogli_validati'):
-                        st.info("Fogli validati:")
-                        for foglio in result['fogli_validati']:
-                            st.write(f"  - {foglio['foglio']}: {foglio['righe_totali']} righe totali, {foglio['righe_con_errori']} con errori")
+            pass  # Manteniamo tmp_path per il calcolo
     
     # Salva tmp_path in session state per il calcolo
     st.session_state['tmp_file_path'] = tmp_path
@@ -548,7 +471,7 @@ if uploaded_file is not None:
     if st.button("Esegui Calcolo", type="primary", use_container_width=True):
         with st.spinner("⏳ Elaborazione in corso..."):
             try:
-                # Usa il file temporaneo già creato durante la validazione
+                # Usa il file temporaneo già creato durante il caricamento
                 tmp_path = st.session_state.get('tmp_file_path')
                 if not tmp_path or not os.path.exists(tmp_path):
                     # Se non esiste, ricrearlo
@@ -569,156 +492,219 @@ if uploaded_file is not None:
                             os.unlink(tmp_holiday_path)
                     
                     # Rileva tour operatour
-                    tour_operators = detect_tour_operators(tmp_path)
+                    tour_operators, aliservice_managed = detect_tour_operators(tmp_path)
                     
-                    # Rileva quale tour operatour è presente
-                    veratour_found = False
-                    alpitour_found = False
-                    domina_found = False
-                    micheltours_found = False
-                    sand_found = False
-                    caboverdetime_found = False
-                    rusconi_found = False
-                    for to_name in tour_operators:
-                        to_clean = re.sub(r'[^a-zA-Z]', '', to_name).lower()
-                        if 'veratour' in to_clean:
-                            veratour_found = True
-                        if 'alpitour' in to_clean:
-                            alpitour_found = True
-                        if 'domina' in to_clean:
-                            domina_found = True
-                        if 'micheltours' in to_clean or 'michel tours' in to_clean:
-                            micheltours_found = True
-                        if 'sand' in to_clean:
-                            sand_found = True
-                        if 'caboverdetime' in to_clean:
-                            caboverdetime_found = True
-                        if 'rusconi' in to_clean:
-                            rusconi_found = True
+                    # Verifica se Aliservice è presente (se ci sono tour operator gestiti da Aliservice)
+                    aliservice_found = False
+                    aliservice_folder = find_tour_operator_folder("Aliservice")
+                    if aliservice_managed and aliservice_folder:
+                        # Verifica se ALISERVICE_AVAILABLE è definito, altrimenti assume False
+                        aliservice_available = globals().get('ALISERVICE_AVAILABLE', False)
+                        if aliservice_available:
+                            aliservice_found = True
+                    
+                    # Rileva dinamicamente quali tour operatour hanno la cartella di calcolo
+                    # Filtra i tour operator gestiti da Aliservice dalla lista principale
+                    tour_operators_to_check = tour_operators - aliservice_managed
+                    
+                    # Mappa i tour operator trovati ai loro nomi normalizzati per il matching
+                    found_tour_operators = {}
+                    for to_name in tour_operators_to_check:
+                        folder_path = find_tour_operator_folder(to_name)
+                        if folder_path:
+                            module_name = get_tour_operator_module_name(to_name)
+                            if module_name:
+                                found_tour_operators[module_name] = {
+                                    'original_name': to_name,
+                                    'folder': folder_path
+                                }
                     
                     all_detail_dfs = []
                     all_totals_dfs = []
                     all_discr_dfs = []
                     
-                    # Elabora Veratour se presente
-                    if veratour_found:
-                        st.info("Elaborazione Veratour...")
-                        cfg_veratour = VeratourCalcConfig(
-                            apt_filter=apt_filter if apt_filter else None,
-                            night_mode=night_mode,
-                            rounding_extra=RoundingPolicy(round_extra_mode, round_extra_step),
-                            rounding_night=RoundingPolicy(round_night_mode, round_night_step),
-                            holiday_dates=holiday_dates,
-                        )
-                        detail_v, totals_v, discr_v = process_files_veratour([tmp_path], cfg_veratour)
-                        all_detail_dfs.append(detail_v)
-                        all_totals_dfs.append(totals_v)
-                        all_discr_dfs.append(discr_v)
+                    # Dizionario di mapping tra nomi normalizzati e funzioni/classi disponibili
+                    tour_operator_processors = {
+                        'veratour': {
+                            'available': True,  # Veratour è sempre disponibile
+                            'config_class': VeratourCalcConfig,
+                            'process_func': process_files_veratour,
+                            'write_func': write_output_excel_veratour,
+                            'config_kwargs': lambda: {
+                                'apt_filter': apt_filter if apt_filter else None,
+                                'night_mode': night_mode,
+                                'rounding_extra': RoundingPolicy(round_extra_mode, round_extra_step),
+                                'rounding_night': RoundingPolicy(round_night_mode, round_night_step),
+                                'holiday_dates': holiday_dates,
+                            }
+                        },
+                        'alpitour': {
+                            'available': ALPITOUR_AVAILABLE,
+                            'config_class': AlpitourCalcConfig,
+                            'process_func': process_files_alpitour,
+                            'write_func': write_output_excel_alpitour,
+                            'config_kwargs': lambda: {
+                                'apt_filter': apt_filter if apt_filter else None,
+                                'rounding_extra': RoundingPolicy("NONE", 5),
+                                'rounding_night': RoundingPolicy("NONE", 5),
+                                'holiday_dates': holiday_dates,
+                            }
+                        },
+                        'aliservice': {
+                            'available': globals().get('ALISERVICE_AVAILABLE', False),
+                            'config_class': AliserviceCalcConfig,
+                            'process_func': process_files_aliservice,
+                            'write_func': write_output_excel_aliservice,
+                            'config_kwargs': lambda: {
+                                'apt_filter': apt_filter if apt_filter else None,
+                                'rounding_extra': RoundingPolicy("NONE", 5),
+                                'rounding_night': RoundingPolicy("NONE", 5),
+                                'holiday_dates': holiday_dates,
+                            }
+                        },
+                        'baobab': {
+                            'available': globals().get('BAOBAB_AVAILABLE', False),
+                            'config_class': BaobabCalcConfig,
+                            'process_func': process_files_baobab,
+                            'write_func': write_output_excel_baobab,
+                            'config_kwargs': lambda: {
+                                'apt_filter': apt_filter if apt_filter else None,
+                                'rounding_extra': RoundingPolicy("NONE", 5),
+                                'rounding_night': RoundingPolicy("NONE", 5),
+                                'holiday_dates': holiday_dates,
+                            }
+                        },
+                        'domina': {
+                            'available': globals().get('DOMINA_AVAILABLE', False),
+                            'config_class': DominaCalcConfig,
+                            'process_func': process_files_domina,
+                            'write_func': write_output_excel_domina,
+                            'config_kwargs': lambda: {
+                                'apt_filter': apt_filter if apt_filter else None,
+                                'rounding_extra': RoundingPolicy("NONE", 5),
+                                'rounding_night': RoundingPolicy("NONE", 5),
+                                'holiday_dates': holiday_dates,
+                            }
+                        },
+                        'micheltours': {
+                            'available': globals().get('MICHELTOURS_AVAILABLE', False),
+                            'config_class': MichelToursCalcConfig,
+                            'process_func': process_files_micheltours,
+                            'write_func': write_output_excel_micheltours,
+                            'config_kwargs': lambda: {
+                                'apt_filter': apt_filter if apt_filter else None,
+                                'rounding_extra': RoundingPolicy("NONE", 5),
+                                'rounding_night': RoundingPolicy("NONE", 5),
+                                'holiday_dates': holiday_dates,
+                            }
+                        },
+                        'sand': {
+                            'available': globals().get('SAND_AVAILABLE', False),
+                            'config_class': SandCalcConfig,
+                            'process_func': process_files_sand,
+                            'write_func': write_output_excel_sand,
+                            'config_kwargs': lambda: {
+                                'apt_filter': apt_filter if apt_filter else None,
+                                'rounding_extra': RoundingPolicy("NONE", 5),
+                                'rounding_night': RoundingPolicy("NONE", 5),
+                                'holiday_dates': holiday_dates,
+                            }
+                        },
+                        'caboverdetime': {
+                            'available': globals().get('CABOVERDETIME_AVAILABLE', False),
+                            'config_class': CaboverdetimeCalcConfig,
+                            'process_func': process_files_caboverdetime,
+                            'write_func': write_output_excel_caboverdetime,
+                            'config_kwargs': lambda: {
+                                'apt_filter': apt_filter if apt_filter else None,
+                                'rounding_extra': RoundingPolicy("NONE", 5),
+                                'rounding_night': RoundingPolicy("NONE", 5),
+                                'holiday_dates': holiday_dates,
+                            }
+                        },
+                        'rusconi': {
+                            'available': globals().get('RUSCONI_AVAILABLE', False),
+                            'config_class': RusconiCalcConfig,
+                            'process_func': process_files_rusconi,
+                            'write_func': write_output_excel_rusconi,
+                            'config_kwargs': lambda: {
+                                'apt_filter': apt_filter if apt_filter else None,
+                                'rounding_extra': RoundingPolicy("NONE", 5),
+                                'rounding_night': RoundingPolicy("NONE", 5),
+                                'holiday_dates': holiday_dates,
+                            }
+                        },
+                    }
                     
-                    # Elabora Alpitour se presente
-                    if alpitour_found:
-                        if ALPITOUR_AVAILABLE:
-                            st.info("Elaborazione Alpitour...")
-                            cfg_alpitour = AlpitourCalcConfig(
-                                apt_filter=apt_filter if apt_filter else None,
-                                rounding_extra=RoundingPolicy("NONE", 5),  # Alpitour: nessun arrotondamento
-                                rounding_night=RoundingPolicy("NONE", 5),  # Alpitour: nessun arrotondamento
-                                holiday_dates=holiday_dates,
-                            )
-                            detail_a, totals_a, discr_a = process_files_alpitour([tmp_path], cfg_alpitour)
-                            all_detail_dfs.append(detail_a)
-                            all_totals_dfs.append(totals_a)
-                            all_discr_dfs.append(discr_a)
+                    # Raccogli prima tutti i tour operator da elaborare per mostrarli in orizzontale
+                    tour_operators_to_process = []
+                    
+                    # Prepara lista tour operator normali
+                    warnings_list = []
+                    for module_name, to_info in found_tour_operators.items():
+                        if module_name in tour_operator_processors:
+                            processor = tour_operator_processors[module_name]
+                            if processor['available'] and processor['config_class'] and processor['process_func']:
+                                tour_operators_to_process.append({
+                                    'name': to_info['original_name'],
+                                    'module_name': module_name,
+                                    'processor': processor,
+                                    'is_aliservice': False
+                                })
+                            else:
+                                warnings_list.append(f"{to_info['original_name']} rilevato ma modulo non disponibile. Installare le dipendenze necessarie.")
+                    
+                    # Aggiungi Aliservice se presente
+                    if aliservice_found and 'aliservice' in tour_operator_processors:
+                        processor = tour_operator_processors['aliservice']
+                        if processor['available'] and processor['config_class'] and processor['process_func']:
+                            tour_operators_to_process.append({
+                                'name': 'Aliservice',
+                                'module_name': 'aliservice',
+                                'processor': processor,
+                                'is_aliservice': True
+                            })
                         else:
-                            st.warning("Alpitour rilevato ma modulo non disponibile. Installare le dipendenze necessarie.")
+                            warnings_list.append("Aliservice rilevato ma modulo non disponibile. Installare le dipendenze necessarie.")
                     
-                    # Elabora Domina se presente
-                    if domina_found:
-                        if DOMINA_AVAILABLE:
-                            st.info("Elaborazione Domina...")
-                            cfg_domina = DominaCalcConfig(
-                                apt_filter=apt_filter if apt_filter else None,
-                                rounding_extra=RoundingPolicy("NONE", 5),  # Domina: nessun arrotondamento
-                                rounding_night=RoundingPolicy("NONE", 5),  # Domina: nessun arrotondamento
-                                holiday_dates=holiday_dates,
-                            )
-                            detail_d, totals_d, discr_d = process_files_domina([tmp_path], cfg_domina)
-                            all_detail_dfs.append(detail_d)
-                            all_totals_dfs.append(totals_d)
-                            all_discr_dfs.append(discr_d)
-                        else:
-                            st.warning("Domina rilevato ma modulo non disponibile. Installare le dipendenze necessarie.")
+                    # Mostra eventuali warning
+                    if warnings_list:
+                        for warning in warnings_list:
+                            st.warning(warning)
                     
-                    # Elabora MichelTours se presente
-                    if micheltours_found:
-                        if MICHELTOURS_AVAILABLE:
-                            st.info("Elaborazione MichelTours...")
-                            cfg_micheltours = MichelToursCalcConfig(
-                                apt_filter=apt_filter if apt_filter else None,
-                                rounding_extra=RoundingPolicy("NONE", 5),  # MichelTours: nessun arrotondamento
-                                rounding_night=RoundingPolicy("NONE", 5),  # MichelTours: nessun arrotondamento
-                                holiday_dates=holiday_dates,
-                            )
-                            detail_mt, totals_mt, discr_mt = process_files_micheltours([tmp_path], cfg_micheltours)
-                            all_detail_dfs.append(detail_mt)
-                            all_totals_dfs.append(totals_mt)
-                            all_discr_dfs.append(discr_mt)
-                        else:
-                            st.warning("MichelTours rilevato ma modulo non disponibile. Installare le dipendenze necessarie.")
+                    # Mostra i tour operator che verranno elaborati in colonne orizzontali
+                    if tour_operators_to_process:
+                        # Calcola il numero di colonne (massimo 4 per riga)
+                        num_cols = min(len(tour_operators_to_process), 4)
+                        cols = st.columns(num_cols)
+                        for idx, to_info in enumerate(tour_operators_to_process):
+                            col_idx = idx % num_cols
+                            with cols[col_idx]:
+                                st.info(f"Elaborazione {to_info['name']}...")
                     
-                    # Elabora SAND se presente
-                    if sand_found:
-                        if SAND_AVAILABLE:
-                            st.info("Elaborazione SAND...")
-                            cfg_sand = SandCalcConfig(
-                                apt_filter=apt_filter if apt_filter else None,
-                                rounding_extra=RoundingPolicy("NONE", 5),  # SAND: nessun arrotondamento
-                                rounding_night=RoundingPolicy("NONE", 5),  # SAND: nessun arrotondamento
-                                holiday_dates=holiday_dates,
-                            )
-                            detail_s, totals_s, discr_s = process_files_sand([tmp_path], cfg_sand)
-                            all_detail_dfs.append(detail_s)
-                            all_totals_dfs.append(totals_s)
-                            all_discr_dfs.append(discr_s)
-                        else:
-                            st.warning("SAND rilevato ma modulo non disponibile. Installare le dipendenze necessarie.")
+                    # Elabora dinamicamente tutti i tour operator
+                    processed_count = 0
+                    errors = []
                     
-                    # Elabora Caboverdetime se presente
-                    if caboverdetime_found:
-                        if CABOVERDETIME_AVAILABLE:
-                            st.info("Elaborazione Caboverdetime...")
-                            cfg_caboverdetime = CaboverdetimeCalcConfig(
-                                apt_filter=apt_filter if apt_filter else None,
-                                rounding_extra=RoundingPolicy("NONE", 5),  # Caboverdetime: nessun arrotondamento
-                                rounding_night=RoundingPolicy("NONE", 5),  # Caboverdetime: nessun arrotondamento
-                                holiday_dates=holiday_dates,
-                            )
-                            detail_ct, totals_ct, discr_ct = process_files_caboverdetime([tmp_path], cfg_caboverdetime)
-                            all_detail_dfs.append(detail_ct)
-                            all_totals_dfs.append(totals_ct)
-                            all_discr_dfs.append(discr_ct)
-                        else:
-                            st.warning("Caboverdetime rilevato ma modulo non disponibile. Installare le dipendenze necessarie.")
+                    for to_info in tour_operators_to_process:
+                        processor = to_info['processor']
+                        try:
+                            cfg = processor['config_class'](**processor['config_kwargs']())
+                            detail, totals, discr = processor['process_func']([tmp_path], cfg)
+                            all_detail_dfs.append(detail)
+                            all_totals_dfs.append(totals)
+                            all_discr_dfs.append(discr)
+                            processed_count += 1
+                        except Exception as e:
+                            errors.append(f"{to_info['name']}: {str(e)}")
                     
-                    # Elabora Rusconi se presente
-                    if rusconi_found:
-                        if RUSCONI_AVAILABLE:
-                            st.info("Elaborazione Rusconi...")
-                            cfg_rusconi = RusconiCalcConfig(
-                                apt_filter=apt_filter if apt_filter else None,
-                                rounding_extra=RoundingPolicy("NONE", 5),  # Rusconi: nessun arrotondamento
-                                rounding_night=RoundingPolicy("NONE", 5),  # Rusconi: nessun arrotondamento
-                                holiday_dates=holiday_dates,
-                            )
-                            detail_r, totals_r, discr_r = process_files_rusconi([tmp_path], cfg_rusconi)
-                            all_detail_dfs.append(detail_r)
-                            all_totals_dfs.append(totals_r)
-                            all_discr_dfs.append(discr_r)
-                        else:
-                            st.warning("Rusconi rilevato ma modulo non disponibile. Installare le dipendenze necessarie.")
+                    # Mostra eventuali errori
+                    if errors:
+                        for error in errors:
+                            st.error(f"Errore durante l'elaborazione: {error}")
                     
-                    if not veratour_found and not alpitour_found and not domina_found and not micheltours_found and not sand_found and not caboverdetime_found and not rusconi_found:
-                        st.error("Nessun tour operatour supportato trovato nel file (Veratour, Alpitour, Domina, MichelTours, SAND, Caboverdetime o Rusconi).")
+                    if processed_count == 0:
+                        st.error("Nessun tour operatour con calcolo disponibile trovato nel file. Verifica che le cartelle dei tour operator siano presenti e contengano i file consuntivo*.py.")
                         st.stop()
                     
                     # Combina i risultati
@@ -743,54 +729,155 @@ if uploaded_file is not None:
                     
                     # Usa la funzione di scrittura appropriata
                     # Se ci sono più tour operator, usa Alpitour (supporta tutti i fogli e gestisce meglio i dati combinati)
-                    # Altrimenti usa la funzione specifica del tour operator trovato
-                    num_tour_operators = sum([veratour_found, alpitour_found, domina_found, micheltours_found, sand_found, caboverdetime_found, rusconi_found])
-                    
-                    if num_tour_operators > 1 and ALPITOUR_AVAILABLE:
+                    # Altrimenti usa la funzione specifica del primo tour operator processato
+                    if processed_count > 1 and ALPITOUR_AVAILABLE and write_output_excel_alpitour:
                         # Più tour operator: usa Alpitour (supporta tutti i fogli e gestisce meglio i dati combinati)
                         write_output_excel_alpitour(output_path, detail_df, totals_df, discr_df)
-                    elif sand_found and SAND_AVAILABLE:
-                        write_output_excel_sand(output_path, detail_df, totals_df, discr_df)
-                    elif rusconi_found and RUSCONI_AVAILABLE:
-                        write_output_excel_rusconi(output_path, detail_df, totals_df, discr_df)
-                    elif caboverdetime_found and CABOVERDETIME_AVAILABLE:
-                        write_output_excel_caboverdetime(output_path, detail_df, totals_df, discr_df)
-                    elif micheltours_found and MICHELTOURS_AVAILABLE:
-                        write_output_excel_micheltours(output_path, detail_df, totals_df, discr_df)
-                    elif domina_found and DOMINA_AVAILABLE:
-                        write_output_excel_domina(output_path, detail_df, totals_df, discr_df)
-                    elif alpitour_found and ALPITOUR_AVAILABLE:
-                        write_output_excel_alpitour(output_path, detail_df, totals_df, discr_df)
-                    elif veratour_found:
-                        write_output_excel_veratour(output_path, detail_df, totals_df, discr_df)
+                    elif processed_count > 0:
+                        # Usa la funzione di scrittura del primo tour operator processato
+                        first_processed = list(found_tour_operators.keys())[0] if found_tour_operators else None
+                        if aliservice_found and 'aliservice' in tour_operator_processors:
+                            processor = tour_operator_processors['aliservice']
+                            if processor.get('write_func'):
+                                processor['write_func'](output_path, detail_df, totals_df, discr_df)
+                            elif ALPITOUR_AVAILABLE and write_output_excel_alpitour:
+                                write_output_excel_alpitour(output_path, detail_df, totals_df, discr_df)
+                            else:
+                                write_output_excel_veratour(output_path, detail_df, totals_df, discr_df)
+                        elif first_processed and first_processed in tour_operator_processors:
+                            processor = tour_operator_processors[first_processed]
+                            if processor.get('write_func'):
+                                processor['write_func'](output_path, detail_df, totals_df, discr_df)
+                            elif ALPITOUR_AVAILABLE and write_output_excel_alpitour:
+                                write_output_excel_alpitour(output_path, detail_df, totals_df, discr_df)
+                            else:
+                                write_output_excel_veratour(output_path, detail_df, totals_df, discr_df)
+                        else:
+                            # Fallback a Alpitour o Veratour
+                            if ALPITOUR_AVAILABLE and write_output_excel_alpitour:
+                                write_output_excel_alpitour(output_path, detail_df, totals_df, discr_df)
+                            else:
+                                write_output_excel_veratour(output_path, detail_df, totals_df, discr_df)
                     else:
                         # Fallback a Veratour se nessun altro disponibile
                         write_output_excel_veratour(output_path, detail_df, totals_df, discr_df)
                     
-                    # Aggiungi foglio TourOperatourNonElaborati
+                    # Aggiungi foglio TourOperatourRilevati con tutti i tour operator (codificati e non)
                     from openpyxl import load_workbook
+                    from openpyxl.styles import Font, PatternFill
                     wb = load_workbook(output_path)
                     
+                    # Rimuovi foglio esistente se presente
+                    if "TourOperatourRilevati" in wb.sheetnames:
+                        wb.remove(wb["TourOperatourRilevati"])
                     if "TourOperatourNonElaborati" in wb.sheetnames:
                         wb.remove(wb["TourOperatourNonElaborati"])
                     
-                    ws = wb.create_sheet("TourOperatourNonElaborati")
+                    ws = wb.create_sheet("TourOperatourRilevati", 0)  # Crea come primo foglio
                     
-                    # Trova tour operatour non elaborati
-                    missing_tour_operators = []
-                    for to_name in tour_operators:
-                        folder_path = find_tour_operator_folder(to_name)
-                        if not folder_path:
-                            missing_tour_operators.append(to_name)
+                    # Raccogli i tour operator effettivamente elaborati dal detail_df
+                    elaborated_tour_operators = set()
+                    if not detail_df.empty and 'TOUR OPERATOR' in detail_df.columns:
+                        elaborated_tour_operators = set(detail_df['TOUR OPERATOR'].dropna().astype(str).unique())
                     
-                    if missing_tour_operators:
-                        ws.cell(row=1, column=1, value="Tour Operatour")
-                        ws.cell(row=1, column=2, value="Motivo")
-                        ws.cell(row=1, column=3, value="Note")
-                        for idx, to_name in enumerate(missing_tour_operators, 2):
-                            ws.cell(row=idx, column=1, value=to_name)
-                            ws.cell(row=idx, column=2, value="Cartella non trovata nella root del progetto")
-                            ws.cell(row=idx, column=3, value="Creare una cartella con il nome del tour operatour e il file consuntivo*.py corrispondente")
+                    # Crea lista di tutti i tour operator con il loro status
+                    # Aggiungi Aliservice se presente (è un'agenzia, non un tour operator nella lista principale)
+                    tour_operators_for_list = tour_operators - aliservice_managed
+                    if aliservice_found:
+                        tour_operators_for_list.add("ALISERVICE")
+                    
+                    tour_operator_list = []
+                    for to_name in sorted(tour_operators_for_list):
+                        to_clean = re.sub(r'[^a-zA-Z]', '', to_name).lower()
+                        is_supported = False
+                        status = "Non codificato"
+                        
+                        # Caso speciale per Aliservice (può avere anche AGENZIA nel detail_df)
+                        if to_name.upper() == "ALISERVICE" and aliservice_found:
+                            # Verifica se Aliservice appare nel detail_df (potrebbe essere in AGENZIA)
+                            if not detail_df.empty:
+                                # Controlla se c'è una colonna AGENZIA con Aliservice
+                                if 'AGENZIA' in detail_df.columns:
+                                    if detail_df['AGENZIA'].astype(str).str.contains('aliservice', case=False, na=False).any():
+                                        is_supported = True
+                                        status = "Codificato - Elaborato"
+                                # Oppure controlla TOUR OPERATOR se contiene dati di Aliservice
+                                elif 'TOUR OPERATOR' in detail_df.columns:
+                                    for elaborated_to in elaborated_tour_operators:
+                                        if 'aliservice' in str(elaborated_to).lower():
+                                            is_supported = True
+                                            status = "Codificato - Elaborato"
+                                            break
+                            
+                            if not is_supported:
+                                is_supported = True
+                                status = "Codificato - Rilevato ma senza dati elaborati"
+                        else:
+                            # Verifica se è stato effettivamente elaborato (appare nel detail_df)
+                            if not detail_df.empty and 'TOUR OPERATOR' in detail_df.columns:
+                                # Confronta il nome normalizzato
+                                for elaborated_to in elaborated_tour_operators:
+                                    elaborated_clean = re.sub(r'[^a-zA-Z]', '', str(elaborated_to)).lower()
+                                    if to_clean == elaborated_clean or to_clean in elaborated_clean or elaborated_clean in to_clean:
+                                        is_supported = True
+                                        status = "Codificato - Elaborato"
+                                        break
+                            
+                            # Se non trovato nel detail_df, verifica se è tra quelli supportati trovati
+                            if not is_supported:
+                                # Verifica dinamicamente se il tour operator ha una cartella di calcolo
+                                module_name = get_tour_operator_module_name(to_name)
+                                if module_name and module_name in found_tour_operators:
+                                    is_supported = True
+                                    status = "Codificato - Rilevato ma senza dati elaborati"
+                                elif module_name and module_name in tour_operator_processors:
+                                    # Ha un processore ma non è stato trovato nel file (potrebbe essere un problema di matching)
+                                    processor = tour_operator_processors[module_name]
+                                    if processor['available'] and processor['config_class']:
+                                        is_supported = True
+                                        status = "Codificato - Rilevato ma senza dati elaborati"
+                        
+                        # Se ancora non supportato, verifica se ha una cartella (potrebbe essere codificato ma non rilevato)
+                        if not is_supported:
+                            folder_path = find_tour_operator_folder(to_name)
+                            if folder_path:
+                                status = "Modulo presente ma non rilevato nel file"
+                            else:
+                                status = "Non codificato"
+                        
+                        note = "Calcolo tariffe disponibile e applicato" if status == "Codificato - Elaborato" else \
+                               "Calcolo tariffe disponibile ma nessun dato da elaborare" if "Codificato" in status else \
+                               "Calcolo tariffe non disponibile - da codificare"
+                        
+                        tour_operator_list.append({
+                            "Tour Operatour": to_name,
+                            "Status": status,
+                            "Note": note
+                        })
+                    
+                    # Scrivi header
+                    ws.cell(row=1, column=1, value="Tour Operatour")
+                    ws.cell(row=1, column=2, value="Status")
+                    ws.cell(row=1, column=3, value="Note")
+                    
+                    # Scrivi dati
+                    for idx, to_info in enumerate(tour_operator_list, 2):
+                        ws.cell(row=idx, column=1, value=to_info["Tour Operatour"])
+                        ws.cell(row=idx, column=2, value=to_info["Status"])
+                        ws.cell(row=idx, column=3, value=to_info["Note"])
+                    
+                    # Formatta header in grassetto
+                    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+                    header_font = Font(bold=True, color="FFFFFF")
+                    for col in range(1, 4):
+                        cell = ws.cell(row=1, column=col)
+                        cell.fill = header_fill
+                        cell.font = header_font
+                    
+                    # Auto-adjust column widths
+                    ws.column_dimensions['A'].width = max(30, len("Tour Operatour") + 5)
+                    ws.column_dimensions['B'].width = max(30, len("Status") + 5)
+                    ws.column_dimensions['C'].width = max(60, len("Note") + 5)
                     
                     wb.save(output_path)
                     
@@ -845,80 +932,10 @@ if uploaded_file is not None:
             use_container_width=True
         )
         
-        if 'totals_df' in st.session_state and not st.session_state['totals_df'].empty:
-            st.markdown("#### Totali per Aeroporto")
-            totals_display = st.session_state['totals_df'].copy()
-            st.dataframe(totals_display, use_container_width=True, hide_index=True)
-        
-        if 'detail_df' in st.session_state and not st.session_state['detail_df'].empty:
-            with st.expander("Anteprima Dettaglio Blocchi (prime 20 righe)", expanded=False):
-                st.dataframe(st.session_state['detail_df'].head(20), use_container_width=True)
-        
         if 'discr_df' in st.session_state and not st.session_state['discr_df'].empty:
             with st.expander("Discrepanze Rilevate", expanded=True):
                 st.dataframe(st.session_state['discr_df'], use_container_width=True)
                 st.info("Le discrepanze indicano possibili inconsistenze nei dati di input. Controlla il file Excel generato per i dettagli completi.")
-        
-        # Dettaglio per Assistente VRN
-        if 'detail_df' in st.session_state and not st.session_state['detail_df'].empty:
-            df_detail = st.session_state['detail_df']
-            if 'ASSISTENTE' in df_detail.columns and 'APT' in df_detail.columns:
-                df_vrn = df_detail[(df_detail['APT'] == 'VRN') & (df_detail['ASSISTENTE'].notna()) & (df_detail['ASSISTENTE'] != '')].copy()
-                if not df_vrn.empty:
-                    with st.expander("Dettaglio Giorno per Giorno - Assistenti VRN", expanded=True):
-                        assistenti_list = sorted(df_vrn['ASSISTENTE'].unique())
-                        selected_assistente = st.selectbox(
-                            "Seleziona Assistente",
-                            options=assistenti_list,
-                            index=0 if 'Manu' in assistenti_list else 0
-                        )
-                        
-                        if selected_assistente:
-                            df_assistente = df_vrn[df_vrn['ASSISTENTE'] == selected_assistente].copy()
-                            df_assistente = df_assistente.sort_values('DATA')
-                            
-                            # Crea tabella formattata
-                            display_df = df_assistente[[
-                                'DATA', 'TURNO_NORMALIZZATO', 'DURATA_TURNO_MIN', 
-                                'TURNO_EUR', 'EXTRA_H:MM', 'EXTRA_EUR', 
-                                'NOTTE_MIN', 'NOTTE_EUR', 'FESTIVO', 'TOTALE_BLOCCO_EUR'
-                            ]].copy()
-                            
-                            # Formatta colonne
-                            display_df['Durata (h:mm)'] = display_df['DURATA_TURNO_MIN'].apply(lambda x: f"{int(x//60)}:{int(x%60):02d}")
-                            display_df['Notturno (h:mm)'] = display_df['NOTTE_MIN'].apply(lambda x: f"{int(x//60)}:{int(x%60):02d}")
-                            display_df['Festivo'] = display_df['FESTIVO'].apply(lambda x: "Sì" if x else "No")
-                            
-                            # Riordina colonne
-                            display_df = display_df[[
-                                'DATA', 'TURNO_NORMALIZZATO', 'Durata (h:mm)', 
-                                'TURNO_EUR', 'EXTRA_H:MM', 'EXTRA_EUR', 
-                                'Notturno (h:mm)', 'NOTTE_EUR', 'Festivo', 'TOTALE_BLOCCO_EUR'
-                            ]]
-                            
-                            display_df.columns = [
-                                'Data', 'Turno', 'Durata', 'Turno (€)', 
-                                'Extra (h:mm)', 'Extra (€)', 'Notturno (h:mm)', 
-                                'Notturno (€)', 'Festivo', 'TOTALE (€)'
-                            ]
-                            
-                            # Formatta valori monetari
-                            for col in ['Turno (€)', 'Extra (€)', 'Notturno (€)', 'TOTALE (€)']:
-                                display_df[col] = display_df[col].apply(lambda x: f"{x:.2f}€")
-                            
-                            st.dataframe(display_df, use_container_width=True, hide_index=True)
-                            
-                            # Totali
-                            st.markdown(f"**Totali per {selected_assistente}:**")
-                            col1, col2, col3, col4 = st.columns(4)
-                            with col1:
-                                st.metric("Turno", f"{df_assistente['TURNO_EUR'].sum():.2f}€")
-                            with col2:
-                                st.metric("Extra", f"{df_assistente['EXTRA_EUR'].sum():.2f}€")
-                            with col3:
-                                st.metric("Notturno", f"{df_assistente['NOTTE_EUR'].sum():.2f}€")
-                            with col4:
-                                st.metric("TOTALE", f"{df_assistente['TOTALE_BLOCCO_EUR'].sum():.2f}€")
 
 else:
     st.info("""
@@ -926,15 +943,14 @@ else:
     
     Per iniziare:
     1. Carica il file Excel del piano di lavoro nella sezione sopra
-    2. (Opzionale) Configura le opzioni nella sidebar a sinistra
-    3. Clicca su "Esegui Calcolo"
-    4. Scarica il file Excel con i risultati
+    2. Clicca su "Esegui Calcolo"
+    3. Scarica il file Excel con i risultati
     
     Il file generato conterrà:
     - Fogli dettagliati per ogni aeroporto (VRN, BGY, NAP, VCE)
     - Foglio TOTALE con i riepiloghi
     - Fogli tecnici (DettaglioBlocchi, TotaliPeriodo, Discrepanze)
-    - Foglio TourOperatourNonElaborati (se presenti)
+    - Foglio TourOperatourRilevati con lo stato di tutti i tour operator
     """)
 
 # Footer
