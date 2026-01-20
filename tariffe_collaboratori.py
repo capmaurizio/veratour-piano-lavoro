@@ -166,7 +166,18 @@ class TariffeManager:
         if pd.isna(val):
             return None
         if isinstance(val, (int, float)):
-            return float(val) if val <= 1.0 else float(val) / 100.0
+            # Se è un numero, verifica se è plausibile come percentuale
+            # Percentuali tipiche sono tra 0 e 100, o già in formato decimale (0-1)
+            if val <= 1.0:
+                # Già in formato decimale (es. 0.20 per 20%)
+                return float(val)
+            elif val <= 100.0:
+                # Percentuale in formato intero (es. 20 per 20%)
+                return float(val) / 100.0
+            else:
+                # Valore troppo alto, probabilmente un errore (es. durata in minuti o altro)
+                # Ignora valori > 100 che non sono percentuali plausibili
+                return None
         val_str = str(val).strip()
         # Rimuovi "+", "%", spazi
         val_str = re.sub(r'[+\s%]', '', val_str)
@@ -350,15 +361,17 @@ class TariffeManager:
             
             key = (apt_code, nome_norm)
             # Se la tariffa esiste già, aggiorna i campi mancanti o sovrascrivi con valori più specifici
+            # I valori dai dettagli aeroporto hanno SEMPRE priorità su quelli generici
             if key in self.tariffe:
                 existing = self.tariffe[key]
-                # Aggiorna campi se sono None nell'esistente o se il nuovo valore è più specifico
+                # Aggiorna campi: i valori dai dettagli aeroporto sovrascrivono sempre
                 if base_eur is not None:
                     existing.base_eur = base_eur
                 if durata_base_h is not None:
                     existing.durata_base_h = durata_base_h
                 if extra_eur_per_h is not None:
                     existing.extra_eur_per_h = extra_eur_per_h
+                # Notturno e Festivo: sovrascrivi sempre se presente (i dettagli aeroporto hanno priorità)
                 if notturno_perc is not None:
                     existing.notturno_perc = notturno_perc
                 if notturno_fascia is not None:
@@ -401,7 +414,18 @@ class TariffeManager:
         if pd.isna(val):
             return None
         if isinstance(val, (int, float)):
-            return float(val) if val <= 1.0 else float(val) / 100.0
+            # Se è un numero, verifica se è plausibile come percentuale
+            # Percentuali tipiche sono tra 0 e 100, o già in formato decimale (0-1)
+            if val <= 1.0:
+                # Già in formato decimale (es. 0.15 per 15%)
+                return float(val)
+            elif val <= 100.0:
+                # Percentuale in formato intero (es. 15 per 15%)
+                return float(val) / 100.0
+            else:
+                # Valore troppo alto, probabilmente un errore (es. 58 potrebbe essere un ID o altro)
+                # Ignora valori > 100 che non sono percentuali plausibili
+                return None
         val_str = str(val).strip()
         # Cerca pattern come "+15%", "15%"
         match = re.search(r'\+?(\d+\.?\d*)%', val_str)
@@ -1099,5 +1123,212 @@ def create_collaboratori_sheet(
     # Mantieni solo le colonne presenti
     cols_to_keep = [c for c in cols_to_keep if c in result.columns]
     result = result[cols_to_keep].copy()
+    
+    return result
+
+
+def create_airport_complete_sheets(
+    detail_df: pd.DataFrame,
+    totals_df: pd.DataFrame,
+    discr_df: pd.DataFrame,
+    holiday_dates: Optional[set] = None
+) -> Dict[str, Dict[str, pd.DataFrame]]:
+    """
+    Crea fogli completi per ogni aeroporto con tutti i dati corretti.
+    
+    Per ogni aeroporto crea:
+    - DettagliBlocchi: tutti i blocchi per quell'aeroporto
+    - Totali: totali aggregati per quell'aeroporto
+    - Collaboratori: calcoli collaboratori per quell'aeroporto
+    - Riepilogo: riepilogo giornaliero per quell'aeroporto
+    
+    Args:
+        detail_df: DataFrame con i dettagli dei blocchi
+        totals_df: DataFrame con i totali del periodo
+        discr_df: DataFrame con le discrepanze
+        holiday_dates: Set di date festive (opzionale)
+    
+    Returns:
+        Dizionario {aeroporto: {nome_foglio: DataFrame}}
+    """
+    if detail_df.empty:
+        return {}
+    
+    if holiday_dates is None:
+        holiday_dates = get_italian_holidays_2025()
+    
+    result = {}
+    
+    # Ottieni lista aeroporti unici
+    aeroporti = sorted(detail_df['APT'].dropna().unique())
+    
+    for apt in aeroporti:
+        apt_dict = {}
+        
+        # Filtra dati per aeroporto
+        df_apt = detail_df[detail_df['APT'] == apt].copy()
+        
+        if df_apt.empty:
+            continue
+        
+        # 1. DETTAGLI BLOCCHI per aeroporto
+        # Ordina colonne per leggibilità
+        cols_dettaglio = [
+            "DATA", "TOUR OPERATOR", "ASSISTENTE", "TURNO_NORMALIZZATO",
+            "INIZIO_DT", "FINE_DT", "DURATA_TURNO_MIN",
+            "TURNO_EUR", "EXTRA_MIN", "EXTRA_EUR", "NOTTE_MIN", "NOTTE_EUR",
+            "FESTIVO", "TOTALE_BLOCCO_EUR"
+        ]
+        
+        # Aggiungi colonne opzionali se presenti
+        optional_cols = ["COMPAGNIA", "ATD_SCELTO", "STD_SCELTO", "NO_DEC", "ERRORE"]
+        for col in optional_cols:
+            if col in df_apt.columns:
+                cols_dettaglio.append(col)
+        
+        # Mantieni solo colonne presenti
+        cols_dettaglio = [c for c in cols_dettaglio if c in df_apt.columns]
+        df_dettaglio = df_apt[cols_dettaglio].copy()
+        
+        # Ordina per data
+        df_dettaglio = df_dettaglio.sort_values(['DATA', 'TOUR OPERATOR'] if 'TOUR OPERATOR' in df_dettaglio.columns else ['DATA'])
+        
+        apt_dict['DettagliBlocchi'] = df_dettaglio
+        
+        # 2. TOTALI per aeroporto
+        # Raggruppa per tour operator e calcola totali
+        if 'TOUR OPERATOR' in df_apt.columns:
+            groupby_cols = ['TOUR OPERATOR']
+        else:
+            groupby_cols = []
+        
+        if not df_apt.empty:
+            # Se non ci sono colonne per raggruppare, crea un totale unico
+            if not groupby_cols:
+                # Crea un totale unico senza raggruppamento
+                totals_apt = pd.DataFrame({
+                    'TURNO_EUR': [df_apt['TURNO_EUR'].sum()],
+                    'EXTRA_EUR': [df_apt['EXTRA_EUR'].sum()],
+                    'NOTTE_EUR': [df_apt['NOTTE_EUR'].sum()],
+                    'TOTALE_BLOCCO_EUR': [df_apt['TOTALE_BLOCCO_EUR'].sum()],
+                    'EXTRA_MIN': [df_apt['EXTRA_MIN'].sum()],
+                    'NOTTE_MIN': [df_apt['NOTTE_MIN'].sum()],
+                    'DURATA_TURNO_MIN': [df_apt['DURATA_TURNO_MIN'].sum()],
+                }).round(2)
+            else:
+                totals_apt = df_apt.groupby(groupby_cols).agg({
+                'TURNO_EUR': 'sum',
+                'EXTRA_EUR': 'sum',
+                'NOTTE_EUR': 'sum',
+                'TOTALE_BLOCCO_EUR': 'sum',
+                'EXTRA_MIN': 'sum',
+                'NOTTE_MIN': 'sum',
+                'DURATA_TURNO_MIN': 'sum',
+            }).round(2)
+            
+            totals_apt = totals_apt.reset_index()
+            
+            # Formatta minuti in h:mm
+            def format_hmm(minutes):
+                if pd.isna(minutes) or minutes == 0:
+                    return "0:00"
+                h = int(minutes // 60)
+                m = int(minutes % 60)
+                return f"{h}:{m:02d}"
+            
+            totals_apt['EXTRA_H:MM'] = totals_apt['EXTRA_MIN'].apply(format_hmm)
+            totals_apt['NOTTE_H:MM'] = totals_apt['NOTTE_MIN'].apply(format_hmm)
+            totals_apt['DURATA_H:MM'] = totals_apt['DURATA_TURNO_MIN'].apply(format_hmm)
+            
+            # Riordina colonne
+            cols_totals = ['TURNO_EUR', 'EXTRA_H:MM', 'EXTRA_EUR', 'NOTTE_H:MM', 'NOTTE_EUR', 'TOTALE_BLOCCO_EUR']
+            if 'TOUR OPERATOR' in totals_apt.columns:
+                cols_totals = ['TOUR OPERATOR'] + cols_totals
+            
+            totals_apt.columns = ['Tour Operator' if c == 'TOUR OPERATOR' else 
+                                 'Turno (€)' if c == 'TURNO_EUR' else
+                                 'Extra (h:mm)' if c == 'EXTRA_H:MM' else
+                                 'Extra (€)' if c == 'EXTRA_EUR' else
+                                 'Notturno (h:mm)' if c == 'NOTTE_H:MM' else
+                                 'Notturno (€)' if c == 'NOTTE_EUR' else
+                                 'TOTALE (€)' if c == 'TOTALE_BLOCCO_EUR' else c
+                                 for c in totals_apt.columns]
+            
+            cols_totals = [c for c in cols_totals if c in totals_apt.columns]
+            apt_dict['Totali'] = totals_apt[cols_totals].copy()
+        else:
+            apt_dict['Totali'] = pd.DataFrame()
+        
+        # 3. COLLABORATORI per aeroporto
+        try:
+            collaboratori_sheet = create_collaboratori_sheet(df_apt, holiday_dates=holiday_dates)
+            if not collaboratori_sheet.empty:
+                apt_dict['Collaboratori'] = collaboratori_sheet
+            else:
+                apt_dict['Collaboratori'] = pd.DataFrame()
+        except Exception as e:
+            # In caso di errore, crea DataFrame vuoto
+            apt_dict['Collaboratori'] = pd.DataFrame()
+        
+        # 4. RIEPILOGO GIORNALIERO per aeroporto
+        if not df_apt.empty:
+            groupby_cols_riep = ['DATA']
+            if 'TOUR OPERATOR' in df_apt.columns:
+                groupby_cols_riep.append('TOUR OPERATOR')
+            
+            riepilogo = df_apt.groupby(groupby_cols_riep).agg({
+                'TURNO_EUR': 'sum',
+                'EXTRA_EUR': 'sum',
+                'NOTTE_EUR': 'sum',
+                'TOTALE_BLOCCO_EUR': 'sum',
+                'EXTRA_MIN': 'sum',
+                'NOTTE_MIN': 'sum',
+            }).round(2)
+            
+            riepilogo = riepilogo.reset_index()
+            
+            # Formatta minuti
+            riepilogo['EXTRA_H:MM'] = riepilogo['EXTRA_MIN'].apply(format_hmm)
+            riepilogo['NOTTE_H:MM'] = riepilogo['NOTTE_MIN'].apply(format_hmm)
+            
+            # Riordina colonne
+            cols_riep = ['DATA', 'Turno (€)', 'Extra (h:mm)', 'Extra (€)', 'Notturno (h:mm)', 'Notturno (€)', 'TOTALE (€)']
+            if 'TOUR OPERATOR' in riepilogo.columns:
+                cols_riep = ['DATA', 'TOUR OPERATOR'] + [c for c in cols_riep if c != 'DATA']
+                riepilogo.columns = ['Data' if c == 'DATA' else
+                                    'Tour Operator' if c == 'TOUR OPERATOR' else
+                                    'Turno (€)' if c == 'TURNO_EUR' else
+                                    'Extra (h:mm)' if c == 'EXTRA_H:MM' else
+                                    'Extra (€)' if c == 'EXTRA_EUR' else
+                                    'Notturno (h:mm)' if c == 'NOTTE_H:MM' else
+                                    'Notturno (€)' if c == 'NOTTE_EUR' else
+                                    'TOTALE (€)' if c == 'TOTALE_BLOCCO_EUR' else c
+                                    for c in riepilogo.columns]
+            else:
+                riepilogo.columns = ['Data' if c == 'DATA' else
+                                    'Turno (€)' if c == 'TURNO_EUR' else
+                                    'Extra (h:mm)' if c == 'EXTRA_H:MM' else
+                                    'Extra (€)' if c == 'EXTRA_EUR' else
+                                    'Notturno (h:mm)' if c == 'NOTTE_H:MM' else
+                                    'Notturno (€)' if c == 'NOTTE_EUR' else
+                                    'TOTALE (€)' if c == 'TOTALE_BLOCCO_EUR' else c
+                                    for c in riepilogo.columns]
+            
+            cols_riep = [c for c in cols_riep if c in riepilogo.columns]
+            apt_dict['Riepilogo'] = riepilogo[cols_riep].copy()
+        else:
+            apt_dict['Riepilogo'] = pd.DataFrame()
+        
+        # 5. DISCREPANZE per aeroporto (se presenti)
+        if not discr_df.empty and 'APT' in discr_df.columns:
+            discr_apt = discr_df[discr_df['APT'] == apt].copy()
+            if not discr_apt.empty:
+                apt_dict['Discrepanze'] = discr_apt
+            else:
+                apt_dict['Discrepanze'] = pd.DataFrame()
+        else:
+            apt_dict['Discrepanze'] = pd.DataFrame()
+        
+        result[apt] = apt_dict
     
     return result

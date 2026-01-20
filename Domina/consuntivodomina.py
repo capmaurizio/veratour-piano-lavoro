@@ -1072,14 +1072,26 @@ def write_output_excel(output_path: str, detail_df: pd.DataFrame, totals_df: pd.
             total_sheet = create_total_by_apt_sheet(detail_df)
             if not total_sheet.empty:
                 total_sheet.to_excel(writer, sheet_name="TOTALE", index=False)
-        
+
         # Create Collaboratori sheet
         try:
-            from tariffe_collaboratori import create_collaboratori_sheet, get_italian_holidays_2025
+            from tariffe_collaboratori import create_collaboratori_sheet, get_italian_holidays_2025, create_airport_complete_sheets
             festivi_2025 = get_italian_holidays_2025()
             collaboratori_sheet = create_collaboratori_sheet(detail_df, holiday_dates=festivi_2025)
             if not collaboratori_sheet.empty:
                 collaboratori_sheet.to_excel(writer, sheet_name="Collaboratori", index=False)
+            
+            # Create complete sheets for each airport
+            airport_sheets = create_airport_complete_sheets(detail_df, totals_df, discr_df, holiday_dates=festivi_2025)
+            for apt, sheets_dict in airport_sheets.items():
+                for sheet_name, sheet_df in sheets_dict.items():
+                    if not sheet_df.empty:
+                        # Nome foglio: "APT_SheetName" (es. "VRN_DettagliBlocchi")
+                        excel_sheet_name = f"{apt}_{sheet_name}"
+                        # Limita lunghezza nome foglio Excel (max 31 caratteri)
+                        if len(excel_sheet_name) > 31:
+                            excel_sheet_name = excel_sheet_name[:31]
+                        sheet_df.to_excel(writer, sheet_name=excel_sheet_name, index=False)
         except ImportError:
             pass  # Modulo tariffe non disponibile, salta
 
