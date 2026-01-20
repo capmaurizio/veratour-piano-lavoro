@@ -213,6 +213,104 @@ st.markdown("""
         padding-top: 20px;
         border-top: 1px solid #e0e0e0;
     }
+    
+    /* Spaziatura per le card */
+    [data-testid="column"] {
+        padding: 0.5rem;
+    }
+    
+    /* Modern button styling - Card-like buttons */
+    .stButton > button {
+        border-radius: 16px !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        font-weight: 500;
+        border: none !important;
+        padding: 1.5rem !important;
+        min-height: 180px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        text-align: center !important;
+        white-space: pre-line !important;
+        line-height: 1.6 !important;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06) !important;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-8px) scale(1.02) !important;
+        box-shadow: 0 20px 25px rgba(0, 0, 0, 0.15), 0 10px 10px rgba(0, 0, 0, 0.1) !important;
+    }
+    
+    /* Card colors based on button key */
+    button[key="btn_carica"] {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        color: white !important;
+    }
+    
+    button[key="btn_calcolo"] {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%) !important;
+        color: white !important;
+    }
+    
+    button[key="btn_risultati"] {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%) !important;
+        color: white !important;
+    }
+    
+    button[key="btn_scarica"] {
+        background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%) !important;
+        color: white !important;
+    }
+    
+    /* Active state (primary buttons) */
+    button[key="btn_carica"][data-baseweb="button"][kind="primary"],
+    button[key="btn_calcolo"][data-baseweb="button"][kind="primary"],
+    button[key="btn_risultati"][data-baseweb="button"][kind="primary"],
+    button[key="btn_scarica"][data-baseweb="button"][kind="primary"] {
+        transform: translateY(-4px) !important;
+        box-shadow: 0 12px 20px rgba(0, 0, 0, 0.2), 0 6px 8px rgba(0, 0, 0, 0.15) !important;
+    }
+    
+    /* Secondary buttons (non-active) - slightly darker */
+    button[key="btn_carica"][data-baseweb="button"][kind="secondary"],
+    button[key="btn_calcolo"][data-baseweb="button"][kind="secondary"],
+    button[key="btn_risultati"][data-baseweb="button"][kind="secondary"],
+    button[key="btn_scarica"][data-baseweb="button"][kind="secondary"] {
+        opacity: 0.85;
+    }
+    
+    button[key="btn_carica"][data-baseweb="button"][kind="secondary"]:hover,
+    button[key="btn_calcolo"][data-baseweb="button"][kind="secondary"]:hover,
+    button[key="btn_risultati"][data-baseweb="button"][kind="secondary"]:hover,
+    button[key="btn_scarica"][data-baseweb="button"][kind="secondary"]:hover {
+        opacity: 1;
+    }
+    
+    /* Info boxes styling */
+    .info-modern {
+        padding: 1.5rem;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+        border-left: 4px solid #2196f3;
+        margin: 1rem 0;
+    }
+    
+    .success-modern {
+        padding: 1.5rem;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+        border-left: 4px solid #4caf50;
+        margin: 1rem 0;
+    }
+    
+    .warning-modern {
+        padding: 1.5rem;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+        border-left: 4px solid #ff9800;
+        margin: 1rem 0;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -393,16 +491,80 @@ round_night_mode = "NONE"  # Nessun arrotondamento per default
 round_night_step = 5
 holiday_file = None  # Nessun file festivi per default
 
-# Area principale
-st.markdown("### Carica File Excel del Piano di Lavoro")
+# Inizializza sezione attiva
+if 'active_section' not in st.session_state:
+    st.session_state.active_section = 'carica_file'
 
-uploaded_file = st.file_uploader(
-    "Seleziona il file Excel",
-    type=["xlsx", "xls"],
-    help="Carica il file Excel contenente il piano di lavoro"
-)
+# Card di navigazione funzionali
+col1, col2, col3, col4 = st.columns(4)
 
-if uploaded_file is not None:
+with col1:
+    is_active = st.session_state.active_section == 'carica_file'
+    btn_style = "box-shadow: 0 12px 20px rgba(0, 0, 0, 0.2); transform: translateY(-4px);" if is_active else ""
+    if st.button(
+        "📁\n\n**Carica File Excel**\n\nCarica il file Excel del piano di lavoro",
+        key="btn_carica",
+        use_container_width=True,
+        type="primary" if is_active else "secondary"
+    ):
+        st.session_state.active_section = 'carica_file'
+        st.rerun()
+
+with col2:
+    is_active = st.session_state.active_section == 'esegui_calcolo'
+    if st.button(
+        "⚙️\n\n**Esegui Calcolo**\n\nAvvia l'elaborazione dei dati",
+        key="btn_calcolo",
+        use_container_width=True,
+        type="primary" if is_active else "secondary"
+    ):
+        st.session_state.active_section = 'esegui_calcolo'
+        st.rerun()
+
+with col3:
+    is_active = st.session_state.active_section == 'risultati'
+    if st.button(
+        "📊\n\n**Risultati**\n\nVisualizza i risultati dell'elaborazione",
+        key="btn_risultati",
+        use_container_width=True,
+        type="primary" if is_active else "secondary"
+    ):
+        st.session_state.active_section = 'risultati'
+        st.rerun()
+
+with col4:
+    is_active = st.session_state.active_section == 'scarica_risultati'
+    if st.button(
+        "💾\n\n**Scarica Risultati**\n\nScarica il file Excel generato",
+        key="btn_scarica",
+        use_container_width=True,
+        type="primary" if is_active else "secondary"
+    ):
+        st.session_state.active_section = 'scarica_risultati'
+        st.rerun()
+
+# Area principale - Mostra solo la sezione attiva
+st.markdown("---")
+
+# Sezione Carica File Excel
+if st.session_state.active_section == 'carica_file':
+    st.markdown("### 📁 Carica File Excel del Piano di Lavoro")
+    uploaded_file = st.file_uploader(
+        "Seleziona il file Excel",
+        type=["xlsx", "xls"],
+        help="Carica il file Excel contenente il piano di lavoro"
+    )
+    if uploaded_file is not None:
+        st.session_state['uploaded_file'] = uploaded_file
+        # Processa immediatamente il file caricato
+        uploaded_file = st.session_state['uploaded_file']
+    else:
+        uploaded_file = None
+else:
+    uploaded_file = st.session_state.get('uploaded_file', None)
+
+# Mostra info file solo nella sezione carica_file
+if st.session_state.active_section == 'carica_file' and uploaded_file is not None:
     file_details = {
         "Nome file": uploaded_file.name,
         "Dimensione": f"{uploaded_file.size / 1024:.2f} KB",
@@ -463,68 +625,72 @@ if uploaded_file is not None:
     # Salva tmp_path in session state per il calcolo
     st.session_state['tmp_file_path'] = tmp_path
     st.session_state['uploaded_file_name'] = uploaded_file.name
+
+# Sezione Esegui Calcolo
+if st.session_state.active_section == 'esegui_calcolo':
+    st.markdown("### ⚙️ Esegui Calcolo")
+    uploaded_file = st.session_state.get('uploaded_file', None)
     
-    # Pulsante per eseguire il calcolo
-    st.markdown("---")
-    st.markdown("### Esegui Calcolo")
-    
-    if st.button("Esegui Calcolo", type="primary", use_container_width=True):
-        with st.spinner("⏳ Elaborazione in corso..."):
-            try:
-                # Usa il file temporaneo già creato durante il caricamento
-                tmp_path = st.session_state.get('tmp_file_path')
-                if not tmp_path or not os.path.exists(tmp_path):
-                    # Se non esiste, ricrearlo
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp_file:
-                        tmp_file.write(uploaded_file.getvalue())
-                        tmp_path = tmp_file.name
-                
+    if uploaded_file is None:
+        st.warning("⚠️ Nessun file caricato. Vai alla sezione 'Carica File Excel' per caricare un file.")
+    else:
+        if st.button("Esegui Calcolo", type="primary", use_container_width=True):
+            with st.spinner("⏳ Elaborazione in corso..."):
                 try:
-                    # Carica festivi se presente
-                    holiday_dates = None
-                    if holiday_file is not None:
-                        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".txt") as tmp_holiday:
-                            tmp_holiday.write(holiday_file.getvalue().decode('utf-8'))
-                            tmp_holiday_path = tmp_holiday.name
-                        try:
-                            holiday_dates = load_holiday_list(tmp_holiday_path)
-                        finally:
-                            os.unlink(tmp_holiday_path)
+                    # Usa il file temporaneo già creato durante il caricamento
+                    tmp_path = st.session_state.get('tmp_file_path')
+                    if not tmp_path or not os.path.exists(tmp_path):
+                        # Se non esiste, ricrearlo
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp_file:
+                            tmp_file.write(uploaded_file.getvalue())
+                            tmp_path = tmp_file.name
                     
-                    # Rileva tour operatour
-                    tour_operators, aliservice_managed = detect_tour_operators(tmp_path)
-                    
-                    # Verifica se Aliservice è presente (se ci sono tour operator gestiti da Aliservice)
-                    aliservice_found = False
-                    aliservice_folder = find_tour_operator_folder("Aliservice")
-                    if aliservice_managed and aliservice_folder:
-                        # Verifica se ALISERVICE_AVAILABLE è definito, altrimenti assume False
-                        aliservice_available = globals().get('ALISERVICE_AVAILABLE', False)
-                        if aliservice_available:
-                            aliservice_found = True
-                    
-                    # Rileva dinamicamente quali tour operatour hanno la cartella di calcolo
-                    # Filtra i tour operator gestiti da Aliservice dalla lista principale
-                    tour_operators_to_check = tour_operators - aliservice_managed
-                    
-                    # Mappa i tour operator trovati ai loro nomi normalizzati per il matching
-                    found_tour_operators = {}
-                    for to_name in tour_operators_to_check:
-                        folder_path = find_tour_operator_folder(to_name)
-                        if folder_path:
-                            module_name = get_tour_operator_module_name(to_name)
-                            if module_name:
-                                found_tour_operators[module_name] = {
-                                    'original_name': to_name,
-                                    'folder': folder_path
-                                }
-                    
-                    all_detail_dfs = []
-                    all_totals_dfs = []
-                    all_discr_dfs = []
-                    
-                    # Dizionario di mapping tra nomi normalizzati e funzioni/classi disponibili
-                    tour_operator_processors = {
+                    try:
+                        # Carica festivi se presente
+                        holiday_dates = None
+                        if holiday_file is not None:
+                            with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix=".txt") as tmp_holiday:
+                                tmp_holiday.write(holiday_file.getvalue().decode('utf-8'))
+                                tmp_holiday_path = tmp_holiday.name
+                            try:
+                                holiday_dates = load_holiday_list(tmp_holiday_path)
+                            finally:
+                                os.unlink(tmp_holiday_path)
+                        
+                        # Rileva tour operatour
+                        tour_operators, aliservice_managed = detect_tour_operators(tmp_path)
+                        
+                        # Verifica se Aliservice è presente (se ci sono tour operator gestiti da Aliservice)
+                        aliservice_found = False
+                        aliservice_folder = find_tour_operator_folder("Aliservice")
+                        if aliservice_managed and aliservice_folder:
+                            # Verifica se ALISERVICE_AVAILABLE è definito, altrimenti assume False
+                            aliservice_available = globals().get('ALISERVICE_AVAILABLE', False)
+                            if aliservice_available:
+                                aliservice_found = True
+                        
+                        # Rileva dinamicamente quali tour operatour hanno la cartella di calcolo
+                        # Filtra i tour operator gestiti da Aliservice dalla lista principale
+                        tour_operators_to_check = tour_operators - aliservice_managed
+                        
+                        # Mappa i tour operator trovati ai loro nomi normalizzati per il matching
+                        found_tour_operators = {}
+                        for to_name in tour_operators_to_check:
+                            folder_path = find_tour_operator_folder(to_name)
+                            if folder_path:
+                                module_name = get_tour_operator_module_name(to_name)
+                                if module_name:
+                                    found_tour_operators[module_name] = {
+                                        'original_name': to_name,
+                                        'folder': folder_path
+                                    }
+                        
+                        all_detail_dfs = []
+                        all_totals_dfs = []
+                        all_discr_dfs = []
+                        
+                        # Dizionario di mapping tra nomi normalizzati e funzioni/classi disponibili
+                        tour_operator_processors = {
                         'veratour': {
                             'available': True,  # Veratour è sempre disponibile
                             'config_class': VeratourCalcConfig,
@@ -636,294 +802,308 @@ if uploaded_file is not None:
                         },
                     }
                     
-                    # Raccogli prima tutti i tour operator da elaborare per mostrarli in orizzontale
-                    tour_operators_to_process = []
-                    
-                    # Prepara lista tour operator normali
-                    warnings_list = []
-                    for module_name, to_info in found_tour_operators.items():
-                        if module_name in tour_operator_processors:
-                            processor = tour_operator_processors[module_name]
-                            if processor['available'] and processor['config_class'] and processor['process_func']:
-                                tour_operators_to_process.append({
-                                    'name': to_info['original_name'],
-                                    'module_name': module_name,
-                                    'processor': processor,
-                                    'is_aliservice': False
-                                })
-                            else:
-                                warnings_list.append(f"{to_info['original_name']} rilevato ma modulo non disponibile. Installare le dipendenze necessarie.")
-                    
-                    # Aggiungi Aliservice se presente
-                    if aliservice_found and 'aliservice' in tour_operator_processors:
-                        processor = tour_operator_processors['aliservice']
-                        if processor['available'] and processor['config_class'] and processor['process_func']:
-                            tour_operators_to_process.append({
-                                'name': 'Aliservice',
-                                'module_name': 'aliservice',
-                                'processor': processor,
-                                'is_aliservice': True
-                            })
-                        else:
-                            warnings_list.append("Aliservice rilevato ma modulo non disponibile. Installare le dipendenze necessarie.")
-                    
-                    # Mostra eventuali warning
-                    if warnings_list:
-                        for warning in warnings_list:
-                            st.warning(warning)
-                    
-                    # Mostra i tour operator che verranno elaborati in colonne orizzontali
-                    if tour_operators_to_process:
-                        # Calcola il numero di colonne (massimo 4 per riga)
-                        num_cols = min(len(tour_operators_to_process), 4)
-                        cols = st.columns(num_cols)
-                        for idx, to_info in enumerate(tour_operators_to_process):
-                            col_idx = idx % num_cols
-                            with cols[col_idx]:
-                                st.info(f"Elaborazione {to_info['name']}...")
-                    
-                    # Elabora dinamicamente tutti i tour operator
-                    processed_count = 0
-                    errors = []
-                    
-                    for to_info in tour_operators_to_process:
-                        processor = to_info['processor']
-                        try:
-                            cfg = processor['config_class'](**processor['config_kwargs']())
-                            detail, totals, discr = processor['process_func']([tmp_path], cfg)
-                            all_detail_dfs.append(detail)
-                            all_totals_dfs.append(totals)
-                            all_discr_dfs.append(discr)
-                            processed_count += 1
-                        except Exception as e:
-                            errors.append(f"{to_info['name']}: {str(e)}")
-                    
-                    # Mostra eventuali errori
-                    if errors:
-                        for error in errors:
-                            st.error(f"Errore durante l'elaborazione: {error}")
-                    
-                    if processed_count == 0:
-                        st.error("Nessun tour operatour con calcolo disponibile trovato nel file. Verifica che le cartelle dei tour operator siano presenti e contengano i file consuntivo*.py.")
-                        st.stop()
-                    
-                    # Combina i risultati
-                    if all_detail_dfs:
-                        detail_df = pd.concat(all_detail_dfs, ignore_index=True)
-                        totals_df = pd.concat(all_totals_dfs, ignore_index=True)
-                        # Combina discrepanze (filtra quelli non vuoti)
-                        discr_list = [d for d in all_discr_dfs if d is not None and not d.empty]
-                        if discr_list:
-                            discr_df = pd.concat(discr_list, ignore_index=True)
-                        else:
-                            discr_df = pd.DataFrame()
-                    else:
-                        detail_df = pd.DataFrame()
-                        totals_df = pd.DataFrame()
-                        discr_df = pd.DataFrame()
-                    
-                    # Genera output Excel
-                    output_buffer = io.BytesIO()
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp_output:
-                        output_path = tmp_output.name
-                    
-                    # Usa la funzione di scrittura appropriata
-                    # Se ci sono più tour operator, usa Alpitour (supporta tutti i fogli e gestisce meglio i dati combinati)
-                    # Altrimenti usa la funzione specifica del primo tour operator processato
-                    if processed_count > 1 and ALPITOUR_AVAILABLE and write_output_excel_alpitour:
-                        # Più tour operator: usa Alpitour (supporta tutti i fogli e gestisce meglio i dati combinati)
-                        write_output_excel_alpitour(output_path, detail_df, totals_df, discr_df)
-                    elif processed_count > 0:
-                        # Usa la funzione di scrittura del primo tour operator processato
-                        first_processed = list(found_tour_operators.keys())[0] if found_tour_operators else None
+                        # Raccogli prima tutti i tour operator da elaborare per mostrarli in orizzontale
+                        tour_operators_to_process = []
+                        
+                        # Prepara lista tour operator normali
+                        warnings_list = []
+                        for module_name, to_info in found_tour_operators.items():
+                            if module_name in tour_operator_processors:
+                                processor = tour_operator_processors[module_name]
+                                if processor['available'] and processor['config_class'] and processor['process_func']:
+                                    tour_operators_to_process.append({
+                                        'name': to_info['original_name'],
+                                        'module_name': module_name,
+                                        'processor': processor,
+                                        'is_aliservice': False
+                                    })
+                                else:
+                                    warnings_list.append(f"{to_info['original_name']} rilevato ma modulo non disponibile. Installare le dipendenze necessarie.")
+                        
+                        # Aggiungi Aliservice se presente
                         if aliservice_found and 'aliservice' in tour_operator_processors:
                             processor = tour_operator_processors['aliservice']
-                            if processor.get('write_func'):
-                                processor['write_func'](output_path, detail_df, totals_df, discr_df)
-                            elif ALPITOUR_AVAILABLE and write_output_excel_alpitour:
-                                write_output_excel_alpitour(output_path, detail_df, totals_df, discr_df)
+                            if processor['available'] and processor['config_class'] and processor['process_func']:
+                                tour_operators_to_process.append({
+                                    'name': 'Aliservice',
+                                    'module_name': 'aliservice',
+                                    'processor': processor,
+                                    'is_aliservice': True
+                                })
                             else:
-                                write_output_excel_veratour(output_path, detail_df, totals_df, discr_df)
-                        elif first_processed and first_processed in tour_operator_processors:
-                            processor = tour_operator_processors[first_processed]
-                            if processor.get('write_func'):
-                                processor['write_func'](output_path, detail_df, totals_df, discr_df)
-                            elif ALPITOUR_AVAILABLE and write_output_excel_alpitour:
-                                write_output_excel_alpitour(output_path, detail_df, totals_df, discr_df)
-                            else:
-                                write_output_excel_veratour(output_path, detail_df, totals_df, discr_df)
-                        else:
-                            # Fallback a Alpitour o Veratour
-                            if ALPITOUR_AVAILABLE and write_output_excel_alpitour:
-                                write_output_excel_alpitour(output_path, detail_df, totals_df, discr_df)
-                            else:
-                                write_output_excel_veratour(output_path, detail_df, totals_df, discr_df)
-                    else:
-                        # Fallback a Veratour se nessun altro disponibile
-                        write_output_excel_veratour(output_path, detail_df, totals_df, discr_df)
-                    
-                    # Aggiungi foglio TourOperatourRilevati con tutti i tour operator (codificati e non)
-                    from openpyxl import load_workbook
-                    from openpyxl.styles import Font, PatternFill
-                    wb = load_workbook(output_path)
-                    
-                    # Rimuovi foglio esistente se presente
-                    if "TourOperatourRilevati" in wb.sheetnames:
-                        wb.remove(wb["TourOperatourRilevati"])
-                    if "TourOperatourNonElaborati" in wb.sheetnames:
-                        wb.remove(wb["TourOperatourNonElaborati"])
-                    
-                    ws = wb.create_sheet("TourOperatourRilevati", 0)  # Crea come primo foglio
-                    
-                    # Raccogli i tour operator effettivamente elaborati dal detail_df
-                    elaborated_tour_operators = set()
-                    if not detail_df.empty and 'TOUR OPERATOR' in detail_df.columns:
-                        elaborated_tour_operators = set(detail_df['TOUR OPERATOR'].dropna().astype(str).unique())
-                    
-                    # Crea lista di tutti i tour operator con il loro status
-                    # Aggiungi Aliservice se presente (è un'agenzia, non un tour operator nella lista principale)
-                    tour_operators_for_list = tour_operators - aliservice_managed
-                    if aliservice_found:
-                        tour_operators_for_list.add("ALISERVICE")
-                    
-                    tour_operator_list = []
-                    for to_name in sorted(tour_operators_for_list):
-                        to_clean = re.sub(r'[^a-zA-Z]', '', to_name).lower()
-                        is_supported = False
-                        status = "Non codificato"
+                                warnings_list.append("Aliservice rilevato ma modulo non disponibile. Installare le dipendenze necessarie.")
                         
-                        # Caso speciale per Aliservice (può avere anche AGENZIA nel detail_df)
-                        if to_name.upper() == "ALISERVICE" and aliservice_found:
-                            # Verifica se Aliservice appare nel detail_df (potrebbe essere in AGENZIA)
-                            if not detail_df.empty:
-                                # Controlla se c'è una colonna AGENZIA con Aliservice
-                                if 'AGENZIA' in detail_df.columns:
-                                    if detail_df['AGENZIA'].astype(str).str.contains('aliservice', case=False, na=False).any():
-                                        is_supported = True
-                                        status = "Codificato - Elaborato"
-                                # Oppure controlla TOUR OPERATOR se contiene dati di Aliservice
-                                elif 'TOUR OPERATOR' in detail_df.columns:
-                                    for elaborated_to in elaborated_tour_operators:
-                                        if 'aliservice' in str(elaborated_to).lower():
-                                            is_supported = True
-                                            status = "Codificato - Elaborato"
-                                            break
-                            
-                            if not is_supported:
-                                is_supported = True
-                                status = "Codificato - Rilevato ma senza dati elaborati"
+                        # Mostra eventuali warning
+                        if warnings_list:
+                            for warning in warnings_list:
+                                st.warning(warning)
+                        
+                        # Mostra i tour operator che verranno elaborati in colonne orizzontali
+                        if tour_operators_to_process:
+                            # Calcola il numero di colonne (massimo 4 per riga)
+                            num_cols = min(len(tour_operators_to_process), 4)
+                            cols = st.columns(num_cols)
+                            for idx, to_info in enumerate(tour_operators_to_process):
+                                col_idx = idx % num_cols
+                                with cols[col_idx]:
+                                    st.info(f"Elaborazione {to_info['name']}...")
+                        
+                        # Elabora dinamicamente tutti i tour operator
+                        processed_count = 0
+                        errors = []
+                        
+                        for to_info in tour_operators_to_process:
+                            processor = to_info['processor']
+                            try:
+                                cfg = processor['config_class'](**processor['config_kwargs']())
+                                detail, totals, discr = processor['process_func']([tmp_path], cfg)
+                                all_detail_dfs.append(detail)
+                                all_totals_dfs.append(totals)
+                                all_discr_dfs.append(discr)
+                                processed_count += 1
+                            except Exception as e:
+                                errors.append(f"{to_info['name']}: {str(e)}")
+                        
+                        # Mostra eventuali errori
+                        if errors:
+                            for error in errors:
+                                st.error(f"Errore durante l'elaborazione: {error}")
+                        
+                        if processed_count == 0:
+                            st.error("Nessun tour operatour con calcolo disponibile trovato nel file. Verifica che le cartelle dei tour operator siano presenti e contengano i file consuntivo*.py.")
+                            st.stop()
+                        
+                        # Combina i risultati
+                        if all_detail_dfs:
+                            detail_df = pd.concat(all_detail_dfs, ignore_index=True)
+                            totals_df = pd.concat(all_totals_dfs, ignore_index=True)
+                            # Combina discrepanze (filtra quelli non vuoti)
+                            discr_list = [d for d in all_discr_dfs if d is not None and not d.empty]
+                            if discr_list:
+                                discr_df = pd.concat(discr_list, ignore_index=True)
+                            else:
+                                discr_df = pd.DataFrame()
                         else:
-                            # Verifica se è stato effettivamente elaborato (appare nel detail_df)
-                            if not detail_df.empty and 'TOUR OPERATOR' in detail_df.columns:
-                                # Confronta il nome normalizzato
-                                for elaborated_to in elaborated_tour_operators:
-                                    elaborated_clean = re.sub(r'[^a-zA-Z]', '', str(elaborated_to)).lower()
-                                    if to_clean == elaborated_clean or to_clean in elaborated_clean or elaborated_clean in to_clean:
-                                        is_supported = True
-                                        status = "Codificato - Elaborato"
-                                        break
+                            detail_df = pd.DataFrame()
+                            totals_df = pd.DataFrame()
+                            discr_df = pd.DataFrame()
+                        
+                        # Genera output Excel
+                        output_buffer = io.BytesIO()
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp_output:
+                            output_path = tmp_output.name
+                        
+                            # Usa la funzione di scrittura appropriata
+                            # Se ci sono più tour operator, usa Alpitour (supporta tutti i fogli e gestisce meglio i dati combinati)
+                            # Altrimenti usa la funzione specifica del primo tour operator processato
+                            if processed_count > 1 and ALPITOUR_AVAILABLE and write_output_excel_alpitour:
+                                # Più tour operator: usa Alpitour (supporta tutti i fogli e gestisce meglio i dati combinati)
+                                write_output_excel_alpitour(output_path, detail_df, totals_df, discr_df)
+                            elif processed_count > 0:
+                                # Usa la funzione di scrittura del primo tour operator processato
+                                first_processed = list(found_tour_operators.keys())[0] if found_tour_operators else None
+                                if aliservice_found and 'aliservice' in tour_operator_processors:
+                                    processor = tour_operator_processors['aliservice']
+                                    if processor.get('write_func'):
+                                        processor['write_func'](output_path, detail_df, totals_df, discr_df)
+                                    elif ALPITOUR_AVAILABLE and write_output_excel_alpitour:
+                                        write_output_excel_alpitour(output_path, detail_df, totals_df, discr_df)
+                                    else:
+                                        write_output_excel_veratour(output_path, detail_df, totals_df, discr_df)
+                                elif first_processed and first_processed in tour_operator_processors:
+                                    processor = tour_operator_processors[first_processed]
+                                    if processor.get('write_func'):
+                                        processor['write_func'](output_path, detail_df, totals_df, discr_df)
+                                    elif ALPITOUR_AVAILABLE and write_output_excel_alpitour:
+                                        write_output_excel_alpitour(output_path, detail_df, totals_df, discr_df)
+                                    else:
+                                        write_output_excel_veratour(output_path, detail_df, totals_df, discr_df)
+                                else:
+                                    # Fallback a Alpitour o Veratour
+                                    if ALPITOUR_AVAILABLE and write_output_excel_alpitour:
+                                        write_output_excel_alpitour(output_path, detail_df, totals_df, discr_df)
+                                    else:
+                                        write_output_excel_veratour(output_path, detail_df, totals_df, discr_df)
+                            else:
+                                # Fallback a Veratour se nessun altro disponibile
+                                write_output_excel_veratour(output_path, detail_df, totals_df, discr_df)
+                    
+                            # Aggiungi foglio TourOperatourRilevati con tutti i tour operator (codificati e non)
+                            from openpyxl import load_workbook
+                            from openpyxl.styles import Font, PatternFill
+                            wb = load_workbook(output_path)
                             
-                            # Se non trovato nel detail_df, verifica se è tra quelli supportati trovati
-                            if not is_supported:
-                                # Verifica dinamicamente se il tour operator ha una cartella di calcolo
-                                module_name = get_tour_operator_module_name(to_name)
-                                if module_name and module_name in found_tour_operators:
-                                    is_supported = True
-                                    status = "Codificato - Rilevato ma senza dati elaborati"
-                                elif module_name and module_name in tour_operator_processors:
-                                    # Ha un processore ma non è stato trovato nel file (potrebbe essere un problema di matching)
-                                    processor = tour_operator_processors[module_name]
-                                    if processor['available'] and processor['config_class']:
+                            # Rimuovi foglio esistente se presente
+                            if "TourOperatourRilevati" in wb.sheetnames:
+                                wb.remove(wb["TourOperatourRilevati"])
+                            if "TourOperatourNonElaborati" in wb.sheetnames:
+                                wb.remove(wb["TourOperatourNonElaborati"])
+                            
+                            ws = wb.create_sheet("TourOperatourRilevati", 0)  # Crea come primo foglio
+                            
+                            # Raccogli i tour operator effettivamente elaborati dal detail_df
+                            elaborated_tour_operators = set()
+                            if not detail_df.empty and 'TOUR OPERATOR' in detail_df.columns:
+                                elaborated_tour_operators = set(detail_df['TOUR OPERATOR'].dropna().astype(str).unique())
+                            
+                            # Crea lista di tutti i tour operator con il loro status
+                            # Aggiungi Aliservice se presente (è un'agenzia, non un tour operator nella lista principale)
+                            tour_operators_for_list = tour_operators - aliservice_managed
+                            if aliservice_found:
+                                tour_operators_for_list.add("ALISERVICE")
+                            
+                            tour_operator_list = []
+                            for to_name in sorted(tour_operators_for_list):
+                                to_clean = re.sub(r'[^a-zA-Z]', '', to_name).lower()
+                                is_supported = False
+                                status = "Non codificato"
+                                
+                                # Caso speciale per Aliservice (può avere anche AGENZIA nel detail_df)
+                                if to_name.upper() == "ALISERVICE" and aliservice_found:
+                                    # Verifica se Aliservice appare nel detail_df (potrebbe essere in AGENZIA)
+                                    if not detail_df.empty:
+                                        # Controlla se c'è una colonna AGENZIA con Aliservice
+                                        if 'AGENZIA' in detail_df.columns:
+                                            if detail_df['AGENZIA'].astype(str).str.contains('aliservice', case=False, na=False).any():
+                                                is_supported = True
+                                                status = "Codificato - Elaborato"
+                                        # Oppure controlla TOUR OPERATOR se contiene dati di Aliservice
+                                        elif 'TOUR OPERATOR' in detail_df.columns:
+                                            for elaborated_to in elaborated_tour_operators:
+                                                if 'aliservice' in str(elaborated_to).lower():
+                                                    is_supported = True
+                                                    status = "Codificato - Elaborato"
+                                                    break
+                                    
+                                    if not is_supported:
                                         is_supported = True
                                         status = "Codificato - Rilevato ma senza dati elaborati"
+                                else:
+                                    # Verifica se è stato effettivamente elaborato (appare nel detail_df)
+                                    if not detail_df.empty and 'TOUR OPERATOR' in detail_df.columns:
+                                        # Confronta il nome normalizzato
+                                        for elaborated_to in elaborated_tour_operators:
+                                            elaborated_clean = re.sub(r'[^a-zA-Z]', '', str(elaborated_to)).lower()
+                                            if to_clean == elaborated_clean or to_clean in elaborated_clean or elaborated_clean in to_clean:
+                                                is_supported = True
+                                                status = "Codificato - Elaborato"
+                                                break
+                                    
+                                    # Se non trovato nel detail_df, verifica se è tra quelli supportati trovati
+                                    if not is_supported:
+                                        # Verifica dinamicamente se il tour operator ha una cartella di calcolo
+                                        module_name = get_tour_operator_module_name(to_name)
+                                        if module_name and module_name in found_tour_operators:
+                                            is_supported = True
+                                            status = "Codificato - Rilevato ma senza dati elaborati"
+                                        elif module_name and module_name in tour_operator_processors:
+                                            # Ha un processore ma non è stato trovato nel file (potrebbe essere un problema di matching)
+                                            processor = tour_operator_processors[module_name]
+                                            if processor['available'] and processor['config_class']:
+                                                is_supported = True
+                                                status = "Codificato - Rilevato ma senza dati elaborati"
+                                
+                                # Se ancora non supportato, verifica se ha una cartella (potrebbe essere codificato ma non rilevato)
+                                if not is_supported:
+                                    folder_path = find_tour_operator_folder(to_name)
+                                    if folder_path:
+                                        status = "Modulo presente ma non rilevato nel file"
+                                    else:
+                                        status = "Non codificato"
+                                
+                                note = "Calcolo tariffe disponibile e applicato" if status == "Codificato - Elaborato" else \
+                                       "Calcolo tariffe disponibile ma nessun dato da elaborare" if "Codificato" in status else \
+                                       "Calcolo tariffe non disponibile - da codificare"
+                                
+                                tour_operator_list.append({
+                                    "Tour Operatour": to_name,
+                                    "Status": status,
+                                    "Note": note
+                                })
+                            
+                            # Scrivi header
+                            ws.cell(row=1, column=1, value="Tour Operatour")
+                            ws.cell(row=1, column=2, value="Status")
+                            ws.cell(row=1, column=3, value="Note")
+                            
+                            # Scrivi dati
+                            for idx, to_info in enumerate(tour_operator_list, 2):
+                                ws.cell(row=idx, column=1, value=to_info["Tour Operatour"])
+                                ws.cell(row=idx, column=2, value=to_info["Status"])
+                                ws.cell(row=idx, column=3, value=to_info["Note"])
+                            
+                            # Formatta header in grassetto
+                            header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+                            header_font = Font(bold=True, color="FFFFFF")
+                            for col in range(1, 4):
+                                cell = ws.cell(row=1, column=col)
+                                cell.fill = header_fill
+                                cell.font = header_font
+                            
+                            # Auto-adjust column widths
+                            ws.column_dimensions['A'].width = max(30, len("Tour Operatour") + 5)
+                            ws.column_dimensions['B'].width = max(30, len("Status") + 5)
+                            ws.column_dimensions['C'].width = max(60, len("Note") + 5)
+                            
+                            wb.save(output_path)
+                            
+                            # Leggi il file generato
+                            with open(output_path, 'rb') as f:
+                                output_buffer.write(f.read())
+                            output_buffer.seek(0)
+                            
+                            # Salva in session state
+                            st.session_state['output_file'] = output_buffer
+                            st.session_state['output_filename'] = f"OUT_{uploaded_file.name}"
+                            st.session_state['detail_df'] = detail_df
+                            st.session_state['totals_df'] = totals_df
+                            st.session_state['discr_df'] = discr_df
                         
-                        # Se ancora non supportato, verifica se ha una cartella (potrebbe essere codificato ma non rilevato)
-                        if not is_supported:
-                            folder_path = find_tour_operator_folder(to_name)
-                            if folder_path:
-                                status = "Modulo presente ma non rilevato nel file"
-                            else:
-                                status = "Non codificato"
+                        # Cleanup
+                        if os.path.exists(tmp_path):
+                            os.unlink(tmp_path)
+                        if os.path.exists(output_path):
+                            os.unlink(output_path)
+                        # Rimuovi da session state
+                        if 'tmp_file_path' in st.session_state:
+                            del st.session_state['tmp_file_path']
                         
-                        note = "Calcolo tariffe disponibile e applicato" if status == "Codificato - Elaborato" else \
-                               "Calcolo tariffe disponibile ma nessun dato da elaborare" if "Codificato" in status else \
-                               "Calcolo tariffe non disponibile - da codificare"
+                        st.success(f"Calcolo completato! Blocchi calcolati: {len(detail_df)}")
                         
-                        tour_operator_list.append({
-                            "Tour Operatour": to_name,
-                            "Status": status,
-                            "Note": note
-                        })
+                        if not discr_df.empty:
+                            st.warning(f"Discrepanze rilevate: {len(discr_df)} (vedi sezione Discrepanze)")
                     
-                    # Scrivi header
-                    ws.cell(row=1, column=1, value="Tour Operatour")
-                    ws.cell(row=1, column=2, value="Status")
-                    ws.cell(row=1, column=3, value="Note")
-                    
-                    # Scrivi dati
-                    for idx, to_info in enumerate(tour_operator_list, 2):
-                        ws.cell(row=idx, column=1, value=to_info["Tour Operatour"])
-                        ws.cell(row=idx, column=2, value=to_info["Status"])
-                        ws.cell(row=idx, column=3, value=to_info["Note"])
-                    
-                    # Formatta header in grassetto
-                    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
-                    header_font = Font(bold=True, color="FFFFFF")
-                    for col in range(1, 4):
-                        cell = ws.cell(row=1, column=col)
-                        cell.fill = header_fill
-                        cell.font = header_font
-                    
-                    # Auto-adjust column widths
-                    ws.column_dimensions['A'].width = max(30, len("Tour Operatour") + 5)
-                    ws.column_dimensions['B'].width = max(30, len("Status") + 5)
-                    ws.column_dimensions['C'].width = max(60, len("Note") + 5)
-                    
-                    wb.save(output_path)
-                    
-                    # Leggi il file generato
-                    with open(output_path, 'rb') as f:
-                        output_buffer.write(f.read())
-                    output_buffer.seek(0)
-                    
-                    # Salva in session state
-                    st.session_state['output_file'] = output_buffer
-                    st.session_state['output_filename'] = f"OUT_{uploaded_file.name}"
-                    st.session_state['detail_df'] = detail_df
-                    st.session_state['totals_df'] = totals_df
-                    st.session_state['discr_df'] = discr_df
-                    
-                    # Cleanup
-                    if os.path.exists(tmp_path):
-                        os.unlink(tmp_path)
-                    if os.path.exists(output_path):
-                        os.unlink(output_path)
-                    # Rimuovi da session state
-                    if 'tmp_file_path' in st.session_state:
-                        del st.session_state['tmp_file_path']
-                    
-                    st.success(f"Calcolo completato! Blocchi calcolati: {len(detail_df)}")
-                    
-                    if not discr_df.empty:
-                        st.warning(f"Discrepanze rilevate: {len(discr_df)} (vedi sezione Discrepanze)")
-                    
-                except Exception as e:
-                    st.error(f"Errore durante l'elaborazione: {str(e)}")
-                    st.exception(e)
-                    if 'tmp_file_path' in st.session_state and os.path.exists(st.session_state['tmp_file_path']):
-                        os.unlink(st.session_state['tmp_file_path'])
-                    if os.path.exists(tmp_path):
-                        os.unlink(tmp_path)
+                    except Exception as e:
+                        st.error(f"Errore durante l'elaborazione: {str(e)}")
+                        st.exception(e)
+                        if 'tmp_file_path' in st.session_state and os.path.exists(st.session_state['tmp_file_path']):
+                            os.unlink(st.session_state['tmp_file_path'])
+                        if os.path.exists(tmp_path):
+                            os.unlink(tmp_path)
                 
-            except Exception as e:
-                st.error(f"Errore: {str(e)}")
-                st.exception(e)
+                except Exception as e:
+                    st.error(f"Errore: {str(e)}")
+                    st.exception(e)
+
+# Sezione Risultati
+elif st.session_state.active_section == 'risultati':
+    st.markdown("### 📊 Risultati")
     
-    # Mostra risultati se disponibili (COME NELLA VERSIONE ORIGINALE)
     if 'output_file' in st.session_state and st.session_state['output_file'] is not None:
-        st.markdown("---")
-        st.markdown("### Risultati")
-        
+        if 'discr_df' in st.session_state and not st.session_state['discr_df'].empty:
+            with st.expander("Discrepanze Rilevate", expanded=True):
+                st.dataframe(st.session_state['discr_df'], use_container_width=True)
+                st.info("Le discrepanze indicano possibili inconsistenze nei dati di input. Controlla il file Excel generato per i dettagli completi.")
+        else:
+            st.success("✅ Nessuna discrepanza rilevata. Il calcolo è stato completato con successo!")
+    else:
+        st.info("⚠️ Nessun risultato disponibile. Esegui prima il calcolo nella sezione 'Esegui Calcolo'.")
+
+# Sezione Scarica Risultati
+elif st.session_state.active_section == 'scarica_risultati':
+    st.markdown("### 💾 Scarica Risultati")
+    
+    if 'output_file' in st.session_state and st.session_state['output_file'] is not None:
         st.download_button(
             label="📥 Scarica File Excel Completo",
             data=st.session_state['output_file'],
@@ -931,20 +1111,25 @@ if uploaded_file is not None:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True
         )
-        
-        if 'discr_df' in st.session_state and not st.session_state['discr_df'].empty:
-            with st.expander("Discrepanze Rilevate", expanded=True):
-                st.dataframe(st.session_state['discr_df'], use_container_width=True)
-                st.info("Le discrepanze indicano possibili inconsistenze nei dati di input. Controlla il file Excel generato per i dettagli completi.")
+        st.info("""
+        Il file generato conterrà:
+        - Fogli dettagliati per ogni aeroporto (VRN, BGY, NAP, VCE)
+        - Foglio TOTALE con i riepiloghi
+        - Fogli tecnici (DettaglioBlocchi, TotaliPeriodo, Discrepanze)
+        - Foglio TourOperatourRilevati con lo stato di tutti i tour operator
+        """)
+    else:
+        st.warning("⚠️ Nessun file disponibile per il download. Esegui prima il calcolo nella sezione 'Esegui Calcolo'.")
 
-else:
+# Messaggio iniziale se nessuna sezione è attiva o se non c'è file caricato
+if st.session_state.active_section == 'carica_file' and uploaded_file is None:
     st.info("""
     👋 **Benvenuto nel Calcolatore Piano Lavoro Multi-Tour Operatour!**
     
     Per iniziare:
-    1. Carica il file Excel del piano di lavoro nella sezione sopra
-    2. Clicca su "Esegui Calcolo"
-    3. Scarica il file Excel con i risultati
+    1. Carica il file Excel del piano di lavoro usando la card "Carica File Excel" sopra
+    2. Clicca su "Esegui Calcolo" per avviare l'elaborazione
+    3. Visualizza i "Risultati" e "Scarica Risultati" quando disponibili
     
     Il file generato conterrà:
     - Fogli dettagliati per ogni aeroporto (VRN, BGY, NAP, VCE)

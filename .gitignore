@@ -32,4 +32,6 @@ Thumbs.db
 # Streamlit (escludi solo cache, non config)
 .streamlit/cache/
 .streamlit/secrets.toml
+streamlit.log
+streamlit.pid
 

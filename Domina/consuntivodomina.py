@@ -1072,6 +1072,16 @@ def write_output_excel(output_path: str, detail_df: pd.DataFrame, totals_df: pd.
             total_sheet = create_total_by_apt_sheet(detail_df)
             if not total_sheet.empty:
                 total_sheet.to_excel(writer, sheet_name="TOTALE", index=False)
+        
+        # Create Collaboratori sheet
+        try:
+            from tariffe_collaboratori import create_collaboratori_sheet, get_italian_holidays_2025
+            festivi_2025 = get_italian_holidays_2025()
+            collaboratori_sheet = create_collaboratori_sheet(detail_df, holiday_dates=festivi_2025)
+            if not collaboratori_sheet.empty:
+                collaboratori_sheet.to_excel(writer, sheet_name="Collaboratori", index=False)
+        except ImportError:
+            pass  # Modulo tariffe non disponibile, salta
 
         # Basic column widths
         for sheet in writer.book.worksheets:

@@ -972,7 +972,10 @@ def create_apt_detail_sheet(df_apt: pd.DataFrame) -> pd.DataFrame:
 
 
 def create_assistenti_vrn_sheet(detail_df: pd.DataFrame) -> pd.DataFrame:
-    """Crea foglio con calcoli per assistenti VRN secondo accordo assistenti"""
+    """
+    Crea foglio con calcoli per assistenti VRN secondo accordo assistenti.
+    Ora usa le tariffe specifiche dal file Excel.
+    """
     if detail_df.empty:
         return pd.DataFrame()
     
@@ -982,12 +985,71 @@ def create_assistenti_vrn_sheet(detail_df: pd.DataFrame) -> pd.DataFrame:
     if df_vrn.empty or 'ASSISTENTE' not in df_vrn.columns:
         return pd.DataFrame()
     
-    # Rimuovi righe senza assistente
-    df_vrn = df_vrn[df_vrn['ASSISTENTE'].notna() & (df_vrn['ASSISTENTE'] != '')].copy()
-    
-    if df_vrn.empty:
-        return pd.DataFrame()
-    
+    # Usa la funzione generica per calcolare le tariffe
+    try:
+        from tariffe_collaboratori import create_collaboratori_sheet, get_italian_holidays_2025
+        
+        # Ottieni festivi
+        festivi_2025 = get_italian_holidays_2025()
+        
+        # Calcola usando tariffe specifiche
+        result = create_collaboratori_sheet(df_vrn, holiday_dates=festivi_2025)
+        
+        # Rimuovi colonna APT se presente (per retrocompatibilità con formato originale)
+        if 'APT' in result.columns:
+            result = result.drop(columns=['APT'])
+        
+        # Riordina colonne per retrocompatibilità
+        if 'TOUR OPERATOR' in result.columns:
+            result = result[[
+                'TOUR OPERATOR', 'ASSISTENTE', 'Blocchi', 'Turno (€)', 'Extra (h:mm)', 'Extra (€)', 
+                'Notturno (h:mm)', 'Notturno (€)', 'TOTALE (€)'
+            ]].copy()
+        else:
+            result = result[[
+                'ASSISTENTE', 'Blocchi', 'Turno (€)', 'Extra (h:mm)', 'Extra (€)', 
+                'Notturno (h:mm)', 'Notturno (€)', 'TOTALE (€)'
+            ]].copy()
+        
+        # Aggiungi riga totale
+        def format_hmm(minutes):
+            if pd.isna(minutes) or minutes == 0:
+                return "0:00"
+            h = int(minutes // 60)
+            m = int(minutes % 60)
+            return f"{h}:{m:02d}"
+        
+        # Estrai minuti totali dal DataFrame originale se disponibili
+        extra_min_total = df_vrn['EXTRA_MIN'].sum() if 'EXTRA_MIN' in df_vrn.columns else 0
+        notte_min_total = df_vrn['NOTTE_MIN'].sum() if 'NOTTE_MIN' in df_vrn.columns else 0
+        
+        # Calcola totali
+        total_row_dict = {
+            'ASSISTENTE': 'TOTALE',
+            'Blocchi': result['Blocchi'].sum(),
+            'Turno (€)': result['Turno (€)'].sum(),
+            'Extra (h:mm)': format_hmm(extra_min_total),
+            'Extra (€)': result['Extra (€)'].sum(),
+            'Notturno (h:mm)': format_hmm(notte_min_total),
+            'Notturno (€)': result['Notturno (€)'].sum(),
+            'TOTALE (€)': result['TOTALE (€)'].sum(),
+        }
+        if 'TOUR OPERATOR' in result.columns:
+            total_row_dict = {'TOUR OPERATOR': '', **total_row_dict}
+        total_row = pd.DataFrame([total_row_dict])
+        
+        result = pd.concat([result, total_row], ignore_index=True)
+        
+        return result
+        
+    except ImportError:
+        # Fallback al metodo originale se il modulo tariffe non è disponibile
+        # (mantenuto per retrocompatibilità)
+        return _create_assistenti_vrn_sheet_legacy(df_vrn)
+
+
+def _create_assistenti_vrn_sheet_legacy(df_vrn: pd.DataFrame) -> pd.DataFrame:
+    """Metodo legacy per calcolare tariffe assistenti VRN (fallback)"""
     # Tariffe assistenti (dal documento Accordo_Assistenti_VRN 26_Completo)
     BASE_ASSISTENTE = 58.0  # € per 3h
     EXTRA_ASSISTENTE_PER_H = 12.0  # €/h
@@ -1311,6 +1373,16 @@ def write_output_excel(output_path: str, detail_df: pd.DataFrame, totals_df: pd.
             assistenti_sheet = create_assistenti_vrn_sheet(detail_df)
             if not assistenti_sheet.empty:
                 assistenti_sheet.to_excel(writer, sheet_name="Assistenti_VRN", index=False)
+        
+        # Create Collaboratori sheet (tutti gli aeroporti)
+        try:
+            from tariffe_collaboratori import create_collaboratori_sheet, get_italian_holidays_2025
+            festivi_2025 = get_italian_holidays_2025()
+            collaboratori_sheet = create_collaboratori_sheet(detail_df, holiday_dates=festivi_2025)
+            if not collaboratori_sheet.empty:
+                collaboratori_sheet.to_excel(writer, sheet_name="Collaboratori", index=False)
+        except ImportError:
+            pass  # Modulo tariffe non disponibile, salta
 
         # Basic column widths
         for sheet in writer.book.worksheets:
