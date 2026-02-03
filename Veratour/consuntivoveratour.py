@@ -420,7 +420,9 @@ def detect_columns(df: pd.DataFrame) -> Dict[str, Optional[str]]:
         "ore_extra": find_col(df, [r"ore\s*extra", r"^extra$", r"extra\s*(min|ore)"]),
         "notturno": find_col(df, [r"^notturno$", r"night"]),
         "festivo": find_col(df, [r"^festivo$", r"holiday"]),
-        "assistente": find_col(df, [r"^assistente$", r"\bassistente\b"]),    }
+        "assistente": find_col(df, [r"^assistente$", r"\bassistente\b"]),
+        "volo": find_col(df, [r"^volo$", r"numero\s*volo", r"n\.?\s*volo", r"flight"]),
+    }
 
 
 # -----------------------------
@@ -448,6 +450,7 @@ class BlockAgg:
     festivo_flag: bool
     first_source: SourceRowRef
     assistente: Optional[str] = None
+    volo: Optional[str] = None
     # optional "provided" values from the first row (for discrepancy sheet)
     provided_importo: Optional[float] = None
     provided_extra_min: Optional[int] = None
@@ -501,41 +504,32 @@ def compute_night_eur(night_min: int, cfg: CalcConfig) -> float:
     return night_min * cfg.night_diff_eur_per_min
 
 
+def _add_italian_holidays_for_year(holidays: set, year: int) -> None:
+    """Aggiunge i festivi italiani per un dato anno (fissi + Pasqua/Pasquetta)."""
+    from datetime import timedelta
+    holidays.add(date(year, 1, 1))   # Capodanno
+    holidays.add(date(year, 1, 6))   # Epifania
+    holidays.add(date(year, 4, 25))  # Liberazione
+    holidays.add(date(year, 5, 1))   # Festa del Lavoro
+    holidays.add(date(year, 6, 2))   # Festa della Repubblica
+    holidays.add(date(year, 11, 1))  # Ognissanti
+    holidays.add(date(year, 8, 15))  # Ferragosto
+    holidays.add(date(year, 12, 8))  # Immacolata
+    holidays.add(date(year, 12, 25)) # Natale
+    holidays.add(date(year, 12, 26)) # Santo Stefano
+    e = easter(year)
+    holidays.add(e)
+    holidays.add(e + timedelta(days=1))  # Pasquetta
+
+
 def get_italian_holidays_2025() -> set[date]:
     """
-    Calcola i festivi italiani per il 2025 secondo la proposta Veratour:
-    - 1 Gennaio (Capodanno)
-    - 6 Gennaio (Epifania)
-    - Pasqua e Pasquetta
-    - 25 Aprile (Liberazione)
-    - 1 Maggio (Festa del Lavoro)
-    - 2 Giugno (Festa della Repubblica)
-    - 1 Novembre (Ognissanti)
-    - 15 Agosto (Ferragosto)
-    - 8 Dicembre (Immacolata)
-    - 25 Dicembre (Natale)
-    - 26 Dicembre (Santo Stefano)
+    Calcola i festivi italiani per il 2025 (e 2026, 2027) secondo la proposta Veratour.
+    Include più anni per supportare piani lavoro 2026+ (es. 1 gennaio 2026 = Capodanno).
     """
     holidays = set()
-    
-    # Festivi fissi 2025
-    holidays.add(date(2025, 1, 1))   # Capodanno
-    holidays.add(date(2025, 1, 6))   # Epifania
-    holidays.add(date(2025, 4, 25))  # Liberazione
-    holidays.add(date(2025, 5, 1))   # Festa del Lavoro
-    holidays.add(date(2025, 6, 2))   # Festa della Repubblica
-    holidays.add(date(2025, 11, 1))  # Ognissanti
-    holidays.add(date(2025, 8, 15))  # Ferragosto
-    holidays.add(date(2025, 12, 8))  # Immacolata
-    holidays.add(date(2025, 12, 25)) # Natale
-    holidays.add(date(2025, 12, 26)) # Santo Stefano
-    
-    # Pasqua e Pasquetta 2025 (calcolate dinamicamente)
-    from datetime import timedelta
-    easter_2025 = easter(2025)
-    holidays.add(easter_2025)              # Pasqua
-    holidays.add(easter_2025 + timedelta(days=1))  # Pasquetta
-    
+    for y in (2025, 2026, 2027):
+        _add_italian_holidays_for_year(holidays, y)
     return holidays
 
 
@@ -682,6 +676,14 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                         assistente_val = str(r[assistente_col]).strip() if pd.notna(r[assistente_col]) else None
                         if assistente_val == "" or assistente_val == "nan":
                             assistente_val = None
+                    
+                    # Extract volo from first row
+                    volo_col = cols.get("volo")
+                    volo_val = None
+                    if volo_col and volo_col in r.index:
+                        volo_val = str(r[volo_col]).strip() if pd.notna(r[volo_col]) else None
+                        if volo_val == "" or volo_val == "nan":
+                            volo_val = None
 
                     blocks[key] = BlockAgg(
                         date=d,
@@ -695,6 +697,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                         festivo_flag=bool(r["__festivo"]),
                         first_source=src,
                         assistente=assistente_val,
+                        volo=volo_val,
                         provided_importo=prov_importo,
                         provided_extra_min=prov_extra_min,
                         provided_night_min=prov_night_min,
@@ -768,6 +771,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
             "APT": b.apt,
             "TOUR OPERATOR": cfg.to_keyword.capitalize(),  # Aggiungi TOUR OPERATOR
             "ASSISTENTE": b.assistente if b.assistente else "",
+            "VOLO": b.volo if b.volo else "",
             "TURNO_FFILL": b.turno_raw_ffill,
             "TURNO_NORMALIZZATO": b.turno_norm,
             "INIZIO_DT": b.start_dt,
@@ -1056,24 +1060,8 @@ def _create_assistenti_vrn_sheet_legacy(df_vrn: pd.DataFrame) -> pd.DataFrame:
     MAGG_NOTTURNA_PERC = 0.15  # +15% proporzionale
     MAGG_FESTIVO_PERC = 0.20  # +20% su tutto
     
-    # Festivi (dal documento)
-    from datetime import date
-    festivi_2025 = {
-        date(2025, 12, 25),  # Natale
-        date(2025, 12, 26),  # Santo Stefano
-        date(2025, 1, 1),    # Capodanno
-        date(2025, 1, 6),    # Epifania
-        date(2025, 4, 25),   # Liberazione
-        date(2025, 5, 1),    # Festa del Lavoro
-        date(2025, 6, 2),    # Festa della Repubblica
-        date(2025, 8, 15),   # Ferragosto
-        date(2025, 11, 1),   # Ognissanti
-        date(2025, 12, 8),   # Immacolata
-    }
-    # Aggiungi Pasqua e Pasquetta 2025
-    easter_2025 = easter(2025)
-    festivi_2025.add(easter_2025)
-    festivi_2025.add(easter_2025 + pd.Timedelta(days=1))
+    # Festivi (stessa lista di get_italian_holidays_2025, include 2025-2027)
+    festivi_2025 = get_italian_holidays_2025()
     
     def calcola_turno_assistente(durata_min):
         """Calcola turno assistente: 58€ base + 12€/h oltre 3h"""

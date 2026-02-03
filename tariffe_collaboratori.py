@@ -29,29 +29,31 @@ except ImportError:
         return date(year, month, day)
 
 
+def _add_italian_holidays_for_year(holidays: set, year: int) -> None:
+    """Aggiunge i festivi italiani per un dato anno (fissi + Pasqua/Pasquetta)."""
+    holidays.add(date(year, 1, 1))   # Capodanno
+    holidays.add(date(year, 1, 6))   # Epifania
+    holidays.add(date(year, 4, 25))  # Liberazione
+    holidays.add(date(year, 5, 1))   # Festa del Lavoro
+    holidays.add(date(year, 6, 2))   # Festa della Repubblica
+    holidays.add(date(year, 11, 1))  # Ognissanti
+    holidays.add(date(year, 8, 15))  # Ferragosto
+    holidays.add(date(year, 12, 8))  # Immacolata
+    holidays.add(date(year, 12, 25)) # Natale
+    holidays.add(date(year, 12, 26)) # Santo Stefano
+    e = easter(year)
+    holidays.add(e)
+    holidays.add(e + timedelta(days=1))  # Pasquetta
+
+
 def get_italian_holidays_2025() -> set:
     """
-    Calcola i festivi italiani per il 2025.
+    Calcola i festivi italiani per il 2025 (e 2026, 2027).
+    Include più anni per supportare piani lavoro 2026+ (es. 1 gennaio 2026 = Capodanno).
     """
     holidays = set()
-    
-    # Festivi fissi 2025
-    holidays.add(date(2025, 1, 1))   # Capodanno
-    holidays.add(date(2025, 1, 6))   # Epifania
-    holidays.add(date(2025, 4, 25))  # Liberazione
-    holidays.add(date(2025, 5, 1))   # Festa del Lavoro
-    holidays.add(date(2025, 6, 2))   # Festa della Repubblica
-    holidays.add(date(2025, 11, 1))  # Ognissanti
-    holidays.add(date(2025, 8, 15))  # Ferragosto
-    holidays.add(date(2025, 12, 8))  # Immacolata
-    holidays.add(date(2025, 12, 25)) # Natale
-    holidays.add(date(2025, 12, 26)) # Santo Stefano
-    
-    # Pasqua e Pasquetta 2025 (calcolate dinamicamente)
-    easter_2025 = easter(2025)
-    holidays.add(easter_2025)              # Pasqua
-    holidays.add(easter_2025 + timedelta(days=1))  # Pasquetta
-    
+    for y in (2025, 2026, 2027):
+        _add_italian_holidays_for_year(holidays, y)
     return holidays
 
 
@@ -535,10 +537,12 @@ def calcola_tariffa_collaboratore(
     extra_min: float = 0.0,
     minuti_notturni: float = 0.0,
     is_festivo: bool = False,
-    tour_operator: Optional[str] = None
+    tour_operator: Optional[str] = None,
+    tipo_servizio: Optional[str] = None  # 'incentive', 'arrivi', 'transfer', None (standard)
 ) -> Dict[str, float]:
     """
     Calcola le tariffe per un collaboratore basandosi sulle tariffe specifiche.
+    Implementa le regole dal documento "REGOLE OPERATIVE COLLABORATORI 2026.docx".
     
     Args:
         aeroporto: Codice aeroporto (es. 'VRN', 'FCO')
@@ -548,6 +552,7 @@ def calcola_tariffa_collaboratore(
         minuti_notturni: Minuti lavorati in fascia notturna
         is_festivo: Se il giorno è festivo
         tour_operator: Tour operator (opzionale, per tariffe specifiche TO)
+        tipo_servizio: Tipo di servizio ('incentive', 'arrivi', 'transfer', None per standard)
     
     Returns:
         Dizionario con: base_eur, extra_eur, notte_eur, totale_eur
@@ -555,34 +560,382 @@ def calcola_tariffa_collaboratore(
     tm = get_tariffe_manager()
     tariffa = tm.get_tariffa(aeroporto, nome, tour_operator)
     
-    # Fallback a tariffe default se non trovata
+    apt_upper = aeroporto.upper().strip()
+    
+    # REGOLE SPECIFICHE PER AEROPORTO (dal documento DOCX)
+    
+    # 1. BGY - Tariffe Festive Forfettarie (REGOLE OPERATIVE 2026)
+    if apt_upper == 'BGY' and is_festivo:
+        categoria = tariffa.categoria if tariffa else None
+        categoria_str = str(categoria).strip().upper() if categoria else ''
+        
+        # Tariffe forfettarie festive per BGY
+        if 'JUNIOR' in categoria_str:
+            # Junior: €40,00 per 3 ore (forfettario festivo)
+            base_eur = 40.0
+            durata_base_h = 3.0
+            # Se durata > 3h, calcola extra proporzionale
+            durata_h = durata_min / 60.0
+            if durata_h > 3.0:
+                ore_extra_base = durata_h - 3.0
+                extra_eur_per_h = 8.0  # €8/h per junior (dalle regole BGY)
+                extra = ore_extra_base * extra_eur_per_h
+            else:
+                extra = 0.0
+            
+            # Extra per ritardi ATD
+            if extra_min > 0:
+                extra += (extra_min / 60.0) * 8.0
+            
+            # Notturno +15% (BGY: 23:00-05:00)
+            if minuti_notturni > 0:
+                valore_orario = base_eur / durata_base_h
+                ore_notturne = minuti_notturni / 60.0
+                valore_parte_notturna = valore_orario * ore_notturne
+                notte = valore_parte_notturna * 0.15
+            else:
+                notte = 0.0
+            
+            # Festivo: già applicato nella base forfettaria, non serve moltiplicatore
+            totale_lordo = base_eur + extra + notte
+            
+            regime = tariffa.regime if tariffa else None
+            def scorpora_netto(lordo: float, regime_val: Optional[str]) -> float:
+                if not regime_val:
+                    return lordo * 0.80
+                regime_str = str(regime_val).strip().upper()
+                if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str:
+                    return lordo
+                elif 'RITENUTA' in regime_str or 'ACCONTO' in regime_str:
+                    return lordo * 0.80
+                else:
+                    return lordo * 0.80
+            
+            return {
+                'base_eur': round(scorpora_netto(base_eur, regime), 2),
+                'extra_eur': round(scorpora_netto(extra, regime), 2),
+                'notte_eur': round(scorpora_netto(notte, regime), 2),
+                'totale_eur': round(scorpora_netto(totale_lordo, regime), 2)
+            }
+        elif 'SENIOR' in categoria_str:
+            # Senior: €50,00 per 3 ore (forfettario festivo)
+            base_eur = 50.0
+            durata_base_h = 3.0
+            # Se durata > 3h, calcola extra proporzionale
+            durata_h = durata_min / 60.0
+            if durata_h > 3.0:
+                ore_extra_base = durata_h - 3.0
+                extra_eur_per_h = 10.0  # €10/h per senior (dalle regole BGY)
+                extra = ore_extra_base * extra_eur_per_h
+            else:
+                extra = 0.0
+            
+            # Extra per ritardi ATD
+            if extra_min > 0:
+                extra += (extra_min / 60.0) * 10.0
+            
+            # Notturno +15% (BGY: 23:00-05:00)
+            if minuti_notturni > 0:
+                valore_orario = base_eur / durata_base_h
+                ore_notturne = minuti_notturni / 60.0
+                valore_parte_notturna = valore_orario * ore_notturne
+                notte = valore_parte_notturna * 0.15
+            else:
+                notte = 0.0
+            
+            # Festivo: già applicato nella base forfettaria, non serve moltiplicatore
+            totale_lordo = base_eur + extra + notte
+            
+            regime = tariffa.regime if tariffa else None
+            def scorpora_netto(lordo: float, regime_val: Optional[str]) -> float:
+                if not regime_val:
+                    return lordo * 0.80
+                regime_str = str(regime_val).strip().upper()
+                if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str:
+                    return lordo
+                elif 'RITENUTA' in regime_str or 'ACCONTO' in regime_str:
+                    return lordo * 0.80
+                else:
+                    return lordo * 0.80
+            
+            return {
+                'base_eur': round(scorpora_netto(base_eur, regime), 2),
+                'extra_eur': round(scorpora_netto(extra, regime), 2),
+                'notte_eur': round(scorpora_netto(notte, regime), 2),
+                'totale_eur': round(scorpora_netto(totale_lordo, regime), 2)
+            }
+    
+    # 2. FCO - Tariffe Incentive (REGOLE OPERATIVE 2026)
+    if apt_upper == 'FCO' and tipo_servizio and 'incentive' in str(tipo_servizio).lower():
+        # Assistenza incentive: €60,00 + IVA per 2h30'
+        # Ore extra incentive: €15,00 + IVA all'ora
+        base_eur = 60.0
+        durata_base_h = 2.5
+        extra_eur_per_h = 15.0
+        notturno_perc = 0.20  # +20% per FCO
+        festivo_perc = 0.20  # +20% per festivi
+        
+        durata_h = durata_min / 60.0
+        base = base_eur
+        
+        # Calcola extra
+        ore_extra_base = max(0, durata_h - durata_base_h)
+        extra_ore_oltre_base = ore_extra_base * extra_eur_per_h
+        if extra_min > 0:
+            extra_minuti_ritardo = (extra_min / 60.0) * extra_eur_per_h
+        else:
+            extra_minuti_ritardo = 0.0
+        extra = extra_ore_oltre_base + extra_minuti_ritardo
+        
+        # Calcola notturno
+        if minuti_notturni > 0:
+            valore_orario = base / durata_base_h if durata_base_h > 0 else 0.0
+            ore_notturne = minuti_notturni / 60.0
+            valore_parte_notturna = valore_orario * ore_notturne
+            notte = valore_parte_notturna * notturno_perc
+        else:
+            notte = 0.0
+        
+        subtotale = base + extra + notte
+        if is_festivo:
+            totale_lordo = subtotale * (1 + festivo_perc)
+        else:
+            totale_lordo = subtotale
+        
+        # FCO: tariffe sono + IVA, quindi già al lordo (per P.IVA non serve scorporo)
+        regime = tariffa.regime if tariffa else None
+        def scorpora_netto(lordo: float, regime_val: Optional[str]) -> float:
+            if not regime_val:
+                return lordo
+            regime_str = str(regime_val).strip().upper()
+            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str:
+                # FCO P.IVA: tariffe sono + IVA, quindi già al netto per il collaboratore
+                return lordo
+            elif 'RITENUTA' in regime_str or 'ACCONTO' in regime_str:
+                return lordo * 0.80
+            else:
+                return lordo
+        
+        return {
+            'base_eur': round(scorpora_netto(base, regime), 2),
+            'extra_eur': round(scorpora_netto(extra, regime), 2),
+            'notte_eur': round(scorpora_netto(notte, regime), 2),
+            'totale_eur': round(scorpora_netto(totale_lordo, regime), 2)
+        }
+    
+    # 3. FCO - Tariffe Arrivi (REGOLE OPERATIVE 2026)
+    if apt_upper == 'FCO' and tipo_servizio and ('arrivi' in str(tipo_servizio).lower() or 'meet' in str(tipo_servizio).lower()):
+        # Tariffa arrivi: €56,00 + IVA per 2h30'
+        # Eventuali prolungamenti generano ore extra secondo tariffa standard (€12/h)
+        base_eur = 56.0
+        durata_base_h = 2.5
+        extra_eur_per_h = 12.0
+        notturno_perc = 0.20  # +20% per FCO
+        festivo_perc = 0.20  # +20% per festivi
+        
+        durata_h = durata_min / 60.0
+        base = base_eur
+        
+        # Calcola extra
+        ore_extra_base = max(0, durata_h - durata_base_h)
+        extra_ore_oltre_base = ore_extra_base * extra_eur_per_h
+        if extra_min > 0:
+            extra_minuti_ritardo = (extra_min / 60.0) * extra_eur_per_h
+        else:
+            extra_minuti_ritardo = 0.0
+        extra = extra_ore_oltre_base + extra_minuti_ritardo
+        
+        # Calcola notturno
+        if minuti_notturni > 0:
+            valore_orario = base / durata_base_h if durata_base_h > 0 else 0.0
+            ore_notturne = minuti_notturni / 60.0
+            valore_parte_notturna = valore_orario * ore_notturne
+            notte = valore_parte_notturna * notturno_perc
+        else:
+            notte = 0.0
+        
+        subtotale = base + extra + notte
+        if is_festivo:
+            totale_lordo = subtotale * (1 + festivo_perc)
+        else:
+            totale_lordo = subtotale
+        
+        # FCO: tariffe sono + IVA, quindi già al lordo (per P.IVA non serve scorporo)
+        regime = tariffa.regime if tariffa else None
+        def scorpora_netto(lordo: float, regime_val: Optional[str]) -> float:
+            if not regime_val:
+                return lordo
+            regime_str = str(regime_val).strip().upper()
+            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str:
+                return lordo
+            elif 'RITENUTA' in regime_str or 'ACCONTO' in regime_str:
+                return lordo * 0.80
+            else:
+                return lordo
+        
+        return {
+            'base_eur': round(scorpora_netto(base, regime), 2),
+            'extra_eur': round(scorpora_netto(extra, regime), 2),
+            'notte_eur': round(scorpora_netto(notte, regime), 2),
+            'totale_eur': round(scorpora_netto(totale_lordo, regime), 2)
+        }
+    
+    # 4. NAP - Tariffe Transfer (REGOLE OPERATIVE 2026)
+    if apt_upper == 'NAP' and tipo_servizio and 'transfer' in str(tipo_servizio).lower():
+        # Tariffa Transfer: €50,00 forfettaria
+        # Eventuali prolungamenti generano ore extra (€12/h)
+        base_eur = 50.0
+        durata_base_h = 0.0  # Forfettaria, non ha durata base fissa
+        extra_eur_per_h = 12.0
+        notturno_perc = 0.15  # +15% per NAP (REGOLE OPERATIVE 2026)
+        festivo_perc = 0.20  # +20% per festivi
+        
+        base = base_eur
+        
+        # Calcola extra solo per prolungamenti oltre la durata prevista
+        # Per transfer, le ore extra si calcolano solo se durata > durata prevista
+        # (non c'è durata base fissa, quindi calcola extra solo se extra_min > 0)
+        if extra_min > 0:
+            extra = (extra_min / 60.0) * extra_eur_per_h
+        else:
+            extra = 0.0
+        
+        # Calcola notturno +15% (NAP: fasce TO)
+        if minuti_notturni > 0:
+            # Per transfer forfettario, calcola notturno proporzionale alla base
+            # Usa una durata base di riferimento di 2.5h per calcolo proporzionale
+            durata_rif_h = 2.5
+            valore_orario = base / durata_rif_h
+            ore_notturne = minuti_notturni / 60.0
+            valore_parte_notturna = valore_orario * ore_notturne
+            notte = valore_parte_notturna * notturno_perc
+        else:
+            notte = 0.0
+        
+        subtotale = base + extra + notte
+        if is_festivo:
+            totale_lordo = subtotale * (1 + festivo_perc)
+        else:
+            totale_lordo = subtotale
+        
+        regime = tariffa.regime if tariffa else None
+        def scorpora_netto(lordo: float, regime_val: Optional[str]) -> float:
+            if not regime_val:
+                return lordo * 0.80
+            regime_str = str(regime_val).strip().upper()
+            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str:
+                return lordo
+            elif 'RITENUTA' in regime_str or 'ACCONTO' in regime_str:
+                return lordo * 0.80
+            else:
+                return lordo * 0.80
+        
+        return {
+            'base_eur': round(scorpora_netto(base, regime), 2),
+            'extra_eur': round(scorpora_netto(extra, regime), 2),
+            'notte_eur': round(scorpora_netto(notte, regime), 2),
+            'totale_eur': round(scorpora_netto(totale_lordo, regime), 2)
+        }
+    
+    # 5. NAP - Tariffe Arrivi (REGOLE OPERATIVE 2026)
+    if apt_upper == 'NAP' and tipo_servizio and ('arrivi' in str(tipo_servizio).lower() or 'meet' in str(tipo_servizio).lower()):
+        # Tariffa Arrivi: €56,00 per 2h30'
+        # Eventuali prolungamenti generano ore extra secondo tariffa standard
+        base_eur = 56.0
+        durata_base_h = 2.5
+        extra_eur_per_h = 12.0
+        notturno_perc = 0.15  # +15% per NAP (REGOLE OPERATIVE 2026)
+        festivo_perc = 0.20  # +20% per festivi
+        
+        durata_h = durata_min / 60.0
+        base = base_eur
+        
+        # Calcola extra
+        ore_extra_base = max(0, durata_h - durata_base_h)
+        extra_ore_oltre_base = ore_extra_base * extra_eur_per_h
+        if extra_min > 0:
+            extra_minuti_ritardo = (extra_min / 60.0) * extra_eur_per_h
+        else:
+            extra_minuti_ritardo = 0.0
+        extra = extra_ore_oltre_base + extra_minuti_ritardo
+        
+        # Calcola notturno +15% (NAP: fasce TO)
+        if minuti_notturni > 0:
+            valore_orario = base / durata_base_h if durata_base_h > 0 else 0.0
+            ore_notturne = minuti_notturni / 60.0
+            valore_parte_notturna = valore_orario * ore_notturne
+            notte = valore_parte_notturna * notturno_perc
+        else:
+            notte = 0.0
+        
+        subtotale = base + extra + notte
+        if is_festivo:
+            totale_lordo = subtotale * (1 + festivo_perc)
+        else:
+            totale_lordo = subtotale
+        
+        regime = tariffa.regime if tariffa else None
+        def scorpora_netto(lordo: float, regime_val: Optional[str]) -> float:
+            if not regime_val:
+                return lordo * 0.80
+            regime_str = str(regime_val).strip().upper()
+            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str:
+                return lordo
+            elif 'RITENUTA' in regime_str or 'ACCONTO' in regime_str:
+                return lordo * 0.80
+            else:
+                return lordo * 0.80
+        
+        return {
+            'base_eur': round(scorpora_netto(base, regime), 2),
+            'extra_eur': round(scorpora_netto(extra, regime), 2),
+            'notte_eur': round(scorpora_netto(notte, regime), 2),
+            'totale_eur': round(scorpora_netto(totale_lordo, regime), 2)
+        }
+    
+    # REGOLE STANDARD (con modifiche per NAP notturno +15%)
     if tariffa is None:
         # Usa tariffe default per aeroporto (se disponibili) o tariffe generiche
         base_eur = 58.0  # Default
         durata_base_h = 3.0  # Default
         extra_eur_per_h = 12.0  # Default
-        notturno_perc = 0.15  # Default +15%
+        # NAP: notturno +15% invece di +20% (REGOLE OPERATIVE 2026)
+        notturno_perc = 0.15 if apt_upper == 'NAP' else 0.15  # Default +15%
         festivo_perc = 0.20  # Default +20%
     else:
         base_eur = tariffa.base_eur or 58.0
         durata_base_h = tariffa.durata_base_h or 3.0
         extra_eur_per_h = tariffa.extra_eur_per_h or 12.0
-        notturno_perc = tariffa.notturno_perc or 0.15
+        # NAP: notturno +15% invece di +20% (REGOLE OPERATIVE 2026)
+        if apt_upper == 'NAP':
+            notturno_perc = 0.15  # Forza +15% per NAP
+        else:
+            notturno_perc = tariffa.notturno_perc or 0.15
         festivo_perc = tariffa.festivo_perc or 0.20
     
-    # Calcola base: se durata <= durata_base, usa base_eur, altrimenti pro-rata
+    # Calcola base: la base è SEMPRE base_eur (fissa per durata_base_h)
+    # Se durata > durata_base, le ore oltre la base vanno calcolate come EXTRA a extra_eur_per_h
     durata_h = durata_min / 60.0
-    if durata_h <= durata_base_h:
-        base = base_eur
-    else:
-        # Pro-rata: base + (durata_extra) * (base_eur / durata_base_h)
-        base = base_eur + (durata_h - durata_base_h) * (base_eur / durata_base_h)
     
-    # Calcola extra
+    # Base è sempre base_eur (fissa per le prime durata_base_h ore)
+    base = base_eur
+    
+    # Calcola ore extra oltre la durata_base
+    # Le ore oltre durata_base vanno considerate come extra
+    ore_extra_base = max(0, durata_h - durata_base_h)
+    
+    # Calcola extra: include sia le ore oltre la base che i minuti extra
+    # extra_min sono minuti extra oltre la durata totale (ritardi ATD)
+    extra_ore_oltre_base = ore_extra_base * extra_eur_per_h
+    
+    # extra_min sono minuti extra per ritardi (oltre la durata totale)
     if extra_min > 0:
-        extra = (extra_min / 60.0) * extra_eur_per_h
+        extra_minuti_ritardo = (extra_min / 60.0) * extra_eur_per_h
     else:
-        extra = 0.0
+        extra_minuti_ritardo = 0.0
+    
+    # Totale extra = ore oltre la base + minuti extra per ritardi
+    extra = extra_ore_oltre_base + extra_minuti_ritardo
     
     # Calcola notturno: proporzionale alla parte notturna
     if minuti_notturni > 0:
@@ -675,29 +1028,7 @@ def create_collaboratori_sheet(
     
     # Festivi
     if holiday_dates is None:
-        # Usa festivi italiani 2025
-        try:
-            from dateutil.easter import easter
-        except ImportError:
-            def easter(year: int) -> date:
-                a = year % 19
-                b = year // 100
-                c = year % 100
-                d = (19 * a + b - b // 4 - ((b - (b + 8) // 25 + 1) // 3) + 15) % 30
-                e = (32 + 2 * (b % 4) + 2 * (c // 4) - d - (c % 4)) % 7
-                f = d + e - 7 * ((a + 11 * d + 22 * e) // 451) + 114
-                month = f // 31
-                day = (f % 31) + 1
-                return date(year, month, day)
-        
-        holiday_dates = {
-            date(2025, 1, 1), date(2025, 1, 6), date(2025, 4, 25),
-            date(2025, 5, 1), date(2025, 6, 2), date(2025, 8, 15),
-            date(2025, 11, 1), date(2025, 12, 8), date(2025, 12, 25), date(2025, 12, 26)
-        }
-        easter_2025 = easter(2025)
-        holiday_dates.add(easter_2025)
-        holiday_dates.add(easter_2025 + timedelta(days=1))
+        holiday_dates = get_italian_holidays_2025()
     
     def is_festivo(data_str):
         """Verifica se la data è festiva"""
@@ -733,6 +1064,30 @@ def create_collaboratori_sheet(
         data_str = row.get('DATA', '')
         is_fest = is_festivo(data_str) if data_str else False
         
+        # Estrai tipo servizio se disponibile (incentive, arrivi, transfer, meet & greet)
+        # Cerca sia "SERVIZI" (plurale) che "SERVIZIO" (singolare) per compatibilità con nuovo formato
+        tipo_servizio = None
+        servizi_col = None
+        if 'SERVIZI' in row.index:
+            servizi_col = 'SERVIZI'
+        elif 'SERVIZIO' in row.index:
+            servizi_col = 'SERVIZIO'
+        
+        if servizi_col and pd.notna(row.get(servizi_col)):
+            servizi_str = str(row.get(servizi_col, '')).strip().upper()
+            if 'INCENTIVE' in servizi_str:
+                tipo_servizio = 'incentive'
+            elif 'ARRIVI' in servizi_str or 'MEET' in servizi_str or 'M&G' in servizi_str or 'M G' in servizi_str:
+                tipo_servizio = 'arrivi'
+            elif 'TRANSFER' in servizi_str:
+                tipo_servizio = 'transfer'
+        elif 'ARRIVI/TRF' in row.index and pd.notna(row.get('ARRIVI/TRF')):
+            arrivi_trf_str = str(row.get('ARRIVI/TRF', '')).strip().upper()
+            if 'M&G' in arrivi_trf_str or 'M G' in arrivi_trf_str or 'MEET' in arrivi_trf_str:
+                tipo_servizio = 'arrivi'
+            elif 'TRANSFER' in arrivi_trf_str or 'TRF' in arrivi_trf_str:
+                tipo_servizio = 'transfer'
+        
         # Calcola tariffe usando il modulo
         tariffe = calcola_tariffa_collaboratore(
             aeroporto=apt,
@@ -741,20 +1096,46 @@ def create_collaboratori_sheet(
             extra_min=extra_min,
             minuti_notturni=minuti_notturni,
             is_festivo=is_fest,
-            tour_operator=tour_operator
+            tour_operator=tour_operator,
+            tipo_servizio=tipo_servizio
         )
+        
+        # Estrai turno normalizzato se disponibile
+        turno_normalizzato = str(row.get('TURNO_NORMALIZZATO', '')).strip() if 'TURNO_NORMALIZZATO' in row.index else ''
+        
+        # Estrai numero di volo se disponibile
+        volo_val = str(row.get('VOLO', '')).strip() if 'VOLO' in row.index and pd.notna(row.get('VOLO')) else ''
+        if volo_val == 'nan' or volo_val == '':
+            volo_val = ''
+        
+        # Calcola minuti totali extra (ore oltre base + ritardi ATD)
+        # Le ore oltre la base vengono calcolate come extra
+        durata_h = durata_min / 60.0
+        tm = get_tariffe_manager()
+        tariffa = tm.get_tariffa(apt, assistente, tour_operator)
+        # Gestisci il caso in cui tariffa è None o durata_base_h è None
+        if tariffa and tariffa.durata_base_h is not None:
+            durata_base_h = float(tariffa.durata_base_h)
+        else:
+            durata_base_h = 3.0  # Default: 3 ore
+        minuti_oltre_base = max(0, int((durata_h - durata_base_h) * 60))
+        # Minuti totali extra = minuti oltre base + minuti ritardi ATD
+        extra_min_totali = minuti_oltre_base + int(extra_min)
         
         rows_collaboratori.append({
             'DATA': data_str,
             'APT': apt,
             'TOUR OPERATOR': tour_operator if tour_operator else '',
             'ASSISTENTE': assistente,
+            'VOLO': volo_val,
+            'TURNO': turno_normalizzato,
             'BASE_EUR': tariffe['base_eur'],
             'EXTRA_EUR': tariffe['extra_eur'],
-            'EXTRA_MIN': int(extra_min),
+            'EXTRA_MIN': extra_min_totali,  # Minuti totali extra (oltre base + ritardi)
+            'EXTRA_MIN_RITARDI': int(extra_min),  # Solo minuti ritardi ATD (per riferimento)
             'NOTTE_MIN': int(minuti_notturni),
             'NOTTE_EUR': tariffe['notte_eur'],
-            'TOTALE_EUR': tariffe['totale_eur'],
+            'TOTALE_EUR': tariffe['totale_eur'],  # Totale include festivo se presente
         })
     
     df_calc = pd.DataFrame(rows_collaboratori)
@@ -767,24 +1148,33 @@ def create_collaboratori_sheet(
     if 'TOUR OPERATOR' in df_calc.columns and df_calc['TOUR OPERATOR'].notna().any():
         groupby_cols = ['DATA', 'APT', 'TOUR OPERATOR', 'ASSISTENTE']
     
+    # Aggiungi una colonna per contare i blocchi (prima del groupby)
+    df_calc['__BLOCCHI_COUNT'] = 1
+    
     collaboratori_totals = df_calc.groupby(groupby_cols).agg({
+        'TURNO': 'first',  # Prendi il primo turno (se più turni, prendi il primo)
+        'VOLO': 'first',  # Prendi il primo volo (se più voli, prendi il primo)
         'BASE_EUR': 'sum',
         'EXTRA_EUR': 'sum',
         'EXTRA_MIN': 'sum',
         'NOTTE_EUR': 'sum',
         'NOTTE_MIN': 'sum',
-        'ASSISTENTE': 'count'  # Numero di blocchi
+        'TOTALE_EUR': 'sum',  # Somma il totale (che include già il festivo se presente)
+        '__BLOCCHI_COUNT': 'count'  # Numero di blocchi
     }).round(2)
     
-    # Calcola il totale come somma dei componenti (non sommare TOTALE_EUR)
-    collaboratori_totals['TOTALE_EUR'] = (
-        collaboratori_totals['BASE_EUR'] + 
-        collaboratori_totals['EXTRA_EUR'] + 
-        collaboratori_totals['NOTTE_EUR']
-    ).round(2)
+    # Il TOTALE_EUR è già corretto perché include il festivo per ogni blocco
+    # Non dobbiamo ricalcolarlo come somma dei componenti, perché il festivo
+    # viene applicato sul subtotale (base + extra + notte) di ogni singolo blocco
     
-    collaboratori_totals.columns = ['Turno (€)', 'Extra (€)', 'Extra (min)', 'Notturno (€)', 'Notturno (min)', 'Blocchi', 'TOTALE (€)']
+    # Reset index prima di rinominare le colonne
     collaboratori_totals = collaboratori_totals.reset_index()
+    
+    # Rinomina colonne nell'ordine corretto (dopo reset_index, le colonne aggregate sono in coda)
+    # L'ordine dopo reset_index è: colonne groupby (DATA, APT, TOUR OPERATOR, ASSISTENTE) + colonne aggregate
+    collaboratori_totals.columns = list(collaboratori_totals.columns[:len(groupby_cols)]) + ['Turno', 'VOLO', 'Turno (€)', 'Extra (€)', 'Extra (min)', 'Notturno (€)', 'Notturno (min)', 'TOTALE (€)', '__BLOCCHI_COUNT']
+    # Rinomina __BLOCCHI_COUNT in Blocchi
+    collaboratori_totals = collaboratori_totals.rename(columns={'__BLOCCHI_COUNT': 'Blocchi'})
     
     # Formatta Extra e Notturno in ore:minuti
     def format_hmm(minutes):
@@ -803,12 +1193,12 @@ def create_collaboratori_sheet(
     # Riordina colonne (mantieni anche Extra (min) e Notturno (min) per i calcoli)
     if 'TOUR OPERATOR' in collaboratori_totals.columns:
         result = collaboratori_totals[[
-            'DATA', 'APT', 'TOUR OPERATOR', 'ASSISTENTE', 'Blocchi', 'Turno (€)', 'Extra (h:mm)', 'Extra (€)', 
+            'DATA', 'APT', 'TOUR OPERATOR', 'ASSISTENTE', 'VOLO', 'Turno', 'Blocchi', 'Turno (€)', 'Extra (h:mm)', 'Extra (€)', 
             'Extra (min)', 'Notturno (h:mm)', 'Notturno (€)', 'Notturno (min)', 'TOTALE (€)'
         ]].copy()
     else:
         result = collaboratori_totals[[
-            'DATA', 'APT', 'ASSISTENTE', 'Blocchi', 'Turno (€)', 'Extra (h:mm)', 'Extra (€)', 
+            'DATA', 'APT', 'ASSISTENTE', 'VOLO', 'Turno', 'Blocchi', 'Turno (€)', 'Extra (h:mm)', 'Extra (€)', 
             'Extra (min)', 'Notturno (h:mm)', 'Notturno (€)', 'Notturno (min)', 'TOTALE (€)'
         ]].copy()
     
@@ -969,14 +1359,19 @@ def create_collaboratori_sheet(
                     (df_all['DATA'].astype(str) == str(data_str)) &
                     (df_all['APT'] == apt) & 
                     (df_all['TOUR OPERATOR'].fillna('') == tour_op) &
-                    (df_all['ASSISTENTE'].isna() | (df_all['ASSISTENTE'] == ''))
+                    (df_all['ASSISTENTE'].isna() | (df_all['ASSISTENTE'].astype(str).str.strip() == ''))
                 ]
             else:
                 df_non_ass = df_all[
                     (df_all['DATA'].astype(str) == str(data_str)) &
                     (df_all['APT'] == apt) &
-                    (df_all['ASSISTENTE'].isna() | (df_all['ASSISTENTE'] == ''))
+                    (df_all['ASSISTENTE'].isna() | (df_all['ASSISTENTE'].astype(str).str.strip() == ''))
                 ]
+            
+            # Se non ci sono blocchi non assegnati E la differenza è dovuta solo ad arrotondamenti, non creare riga NON ASSEGNATO
+            if df_non_ass.empty and abs(row['TOTALE_NON_ASSEGNATO']) < 0.10:
+                # Non creare riga NON ASSEGNATO se la differenza è minima (solo arrotondamenti)
+                continue
             
             if not df_non_ass.empty:
                 blocchi_non_ass = len(df_non_ass)
@@ -1027,6 +1422,29 @@ def create_collaboratori_sheet(
                     if tariffa_default:
                         # Calcola netto usando la tariffa trovata
                         is_fest_blocco = is_festivo(data_str) if data_str else False
+                        # Estrai tipo servizio dal blocco se disponibile
+                        # Cerca sia "SERVIZI" (plurale) che "SERVIZIO" (singolare) per compatibilità con nuovo formato
+                        tipo_servizio_blocco = None
+                        servizi_col_blocco = None
+                        if 'SERVIZI' in blocco_row.index:
+                            servizi_col_blocco = 'SERVIZI'
+                        elif 'SERVIZIO' in blocco_row.index:
+                            servizi_col_blocco = 'SERVIZIO'
+                        
+                        if servizi_col_blocco and pd.notna(blocco_row.get(servizi_col_blocco)):
+                            servizi_str = str(blocco_row.get(servizi_col_blocco, '')).strip().upper()
+                            if 'INCENTIVE' in servizi_str:
+                                tipo_servizio_blocco = 'incentive'
+                            elif 'ARRIVI' in servizi_str or 'MEET' in servizi_str or 'M&G' in servizi_str:
+                                tipo_servizio_blocco = 'arrivi'
+                            elif 'TRANSFER' in servizi_str:
+                                tipo_servizio_blocco = 'transfer'
+                        elif 'ARRIVI/TRF' in blocco_row.index and pd.notna(blocco_row.get('ARRIVI/TRF')):
+                            arrivi_trf_str = str(blocco_row.get('ARRIVI/TRF', '')).strip().upper()
+                            if 'M&G' in arrivi_trf_str or 'MEET' in arrivi_trf_str:
+                                tipo_servizio_blocco = 'arrivi'
+                            elif 'TRANSFER' in arrivi_trf_str or 'TRF' in arrivi_trf_str:
+                                tipo_servizio_blocco = 'transfer'
                         tariffe_blocco = calcola_tariffa_collaboratore(
                             aeroporto=apt,
                             nome=tariffa_default.nome,  # Usa il nome della tariffa di default
@@ -1034,7 +1452,8 @@ def create_collaboratori_sheet(
                             extra_min=extra_blocco,
                             minuti_notturni=notte_blocco,
                             is_festivo=is_fest_blocco,
-                            tour_operator=tour_op if tour_op else None
+                            tour_operator=tour_op if tour_op else None,
+                            tipo_servizio=tipo_servizio_blocco
                         )
                         turno_non_ass_netto += tariffe_blocco['base_eur']
                         extra_non_ass_netto += tariffe_blocco['extra_eur']
@@ -1085,12 +1504,21 @@ def create_collaboratori_sheet(
                 extra_min_non_ass_tot = extra_min_non_ass
                 notte_min_non_ass_tot = notte_min_non_ass
             
+            # Crea riga NON ASSEGNATO solo se:
+            # 1. Ci sono blocchi non assegnati nel detail_df, OPPURE
+            # 2. C'è una differenza significativa (>0.10€) dovuta ad altri motivi
+            if df_non_ass.empty:
+                # Se non ci sono blocchi non assegnati, non creare la riga
+                # (la differenza potrebbe essere dovuta solo ad arrotondamenti)
+                continue
+            
             if row['TOTALE_NON_ASSEGNATO'] > 0.01:  # Solo se c'è una differenza significativa
                 # Per NON ASSEGNATO, tutti i valori sono zero perché non possiamo calcolare senza sapere il collaboratore
                 row_non_ass = {
                     'DATA': data_str,
                     'APT': apt,
                     'ASSISTENTE': 'NON ASSEGNATO',
+                    'Turno': '',
                     'Blocchi': blocchi_non_ass if 'blocchi_non_ass' in locals() else 0,
                     'Turno (€)': 0.00,
                     'Extra (h:mm)': '0:00',
@@ -1113,7 +1541,7 @@ def create_collaboratori_sheet(
     result = result.sort_values(sort_cols, ascending=[True, True, True, False] if len(sort_cols) > 3 else [True, True, False])
     
     # Rimuovi colonne Extra (min) e Notturno (min) dal risultato finale (mantieni solo h:mm)
-    cols_to_keep = ['DATA', 'APT', 'ASSISTENTE', 'Blocchi', 'Turno (€)', 'Extra (h:mm)', 'Extra (€)', 
+    cols_to_keep = ['DATA', 'APT', 'ASSISTENTE', 'VOLO', 'Turno', 'Blocchi', 'Turno (€)', 'Extra (h:mm)', 'Extra (€)', 
                     'Notturno (h:mm)', 'Notturno (€)', 'TOTALE (€)']
     if 'TOUR OPERATOR' in result.columns:
         # Inserisci TOUR OPERATOR dopo APT

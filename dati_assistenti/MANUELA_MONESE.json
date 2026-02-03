@@ -1,0 +1,30 @@
+{
+  "2026-01-03_VRN": {
+    "std": "06:00",
+    "durata_effettiva_h": 3.5,
+    "durata_effettiva_min": 210,
+    "extra_min": 0,
+    "notte_min": 0,
+    "tariffe": {
+      "base_eur": 46.4,
+      "extra_eur": 4.8,
+      "notte_eur": 0.0,
+      "totale_eur": 51.2
+    },
+    "data_inserimento": "2026-01-21T16:22:23.686380"
+  },
+  "2026-01-03_VRN_NO_6022": {
+    "std": "06:00",
+    "durata_effettiva_h": 3.5,
+    "durata_effettiva_min": 210,
+    "extra_min": 0,
+    "notte_min": 0,
+    "tariffe": {
+      "base_eur": 46.4,
+      "extra_eur": 4.8,
+      "notte_eur": 0.0,
+      "totale_eur": 51.2
+    },
+    "data_inserimento": "2026-01-21T16:48:04.483590"
+  }
+}

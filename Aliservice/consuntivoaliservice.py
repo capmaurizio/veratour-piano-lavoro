@@ -407,7 +407,7 @@ def detect_columns(df: pd.DataFrame) -> Dict[str, Optional[str]]:
         "data": find_col(df, [r"^DATA$", r"\bDATE\b", r"^data$"]),
         "agenzia": find_col(df, [r"^AGENZIA$", r"\bAGENCY\b"]),  # Aliservice è un'AGENZIA
         "tour_operator": find_col(df, [r"TOUR\s*OPERATOR", r"^TO$", r"\bOPERATORE\b"]),  # Tour operator gestito dall'agenzia
-        "servizi": find_col(df, [r"^SERVIZI$", r"^Servizi$", r"\bSERVIZIO\b"]),  # Tipo servizio (Tour Operator, MICE, VIP, ecc.)
+        "servizi": find_col(df, [r"^SERVIZI$", r"^SERVIZIO$", r"^Servizi$", r"\bSERVIZIO\b"]),  # Tipo servizio (Tour Operator, MICE, VIP, ecc.) - supporta sia SERVIZI che SERVIZIO
         "arrivi_trf": find_col(df, [r"^ARRIVI/TRF$", r"^arrivi/trf$", r"^ARRIVI\s*TRF$", r"^arrivi\s*trf$", r"^ARRIVI$", r"^TRF$", r"\bARRIVI\b", r"\bTRF\b"]),  # Campo arrivi/trf (colonna I) - M&G = Meet & Greet
         "giorno": find_col(df, [r"^GIORNO$", r"^giorno$", r"\bDAY\b"]),  # Per verificare festivo
         "convocazione": find_col(df, [r"^CONVOCAZIONE$", r"^conv\.ne$", r"^conv\.?ne$", r"\bCONV\b"]),  # Convocazione
@@ -459,9 +459,19 @@ class BlockAgg:
 
 
 def iter_excel_sheets(file_path: str) -> Iterable[Tuple[str, pd.DataFrame]]:
-    """Itera su tutti i fogli del file Excel"""
+    """Itera sui fogli del file Excel. Legge solo 'PIANO VOLI' se presente, altrimenti tutti i fogli (retrocompatibilità)"""
     xls = pd.ExcelFile(file_path)
+    # Cerca il foglio "PIANO VOLI" (nuovo formato)
+    target_sheet = None
     for sheet in xls.sheet_names:
+        if sheet.upper().strip() == "PIANO VOLI":
+            target_sheet = sheet
+            break
+    
+    # Se trova "PIANO VOLI", leggi solo quello, altrimenti tutti (retrocompatibilità)
+    sheets_to_process = [target_sheet] if target_sheet else xls.sheet_names
+    
+    for sheet in sheets_to_process:
         df = pd.read_excel(file_path, sheet_name=sheet)
         yield sheet, df
 

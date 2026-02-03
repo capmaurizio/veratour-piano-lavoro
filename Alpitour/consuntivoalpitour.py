@@ -608,41 +608,32 @@ def compute_night_eur(night_min: int, cfg: CalcConfig, apt: str = None) -> float
         return base_eur
 
 
+def _add_italian_holidays_for_year(holidays: set, year: int) -> None:
+    """Aggiunge i festivi italiani per un dato anno (fissi + Pasqua/Pasquetta)."""
+    from datetime import timedelta
+    holidays.add(date(year, 1, 1))   # Capodanno
+    holidays.add(date(year, 1, 6))   # Epifania
+    holidays.add(date(year, 4, 25))  # Liberazione
+    holidays.add(date(year, 5, 1))   # Festa del Lavoro
+    holidays.add(date(year, 6, 2))   # Festa della Repubblica
+    holidays.add(date(year, 11, 1))  # Ognissanti
+    holidays.add(date(year, 8, 15))  # Ferragosto
+    holidays.add(date(year, 12, 8))  # Immacolata
+    holidays.add(date(year, 12, 25)) # Natale
+    holidays.add(date(year, 12, 26)) # Santo Stefano
+    e = easter(year)
+    holidays.add(e)
+    holidays.add(e + timedelta(days=1))  # Pasquetta
+
+
 def get_italian_holidays_2025() -> set[date]:
     """
-    Calcola i festivi italiani per il 2025 secondo le linee guida Alpitour:
-    - 1 Gennaio (Capodanno)
-    - 6 Gennaio (Epifania)
-    - Pasqua e Pasquetta
-    - 25 Aprile (Liberazione)
-    - 1 Maggio (Festa del Lavoro)
-    - 2 Giugno (Festa della Repubblica)
-    - 1 Novembre (Ognissanti)
-    - 15 Agosto (Ferragosto)
-    - 8 Dicembre (Immacolata)
-    - 25 Dicembre (Natale)
-    - 26 Dicembre (Santo Stefano)
+    Calcola i festivi italiani per il 2025 (e 2026, 2027) secondo le linee guida Alpitour.
+    Include più anni per supportare piani lavoro 2026+ (es. 1 gennaio 2026 = Capodanno).
     """
     holidays = set()
-    
-    # Festivi fissi 2025
-    holidays.add(date(2025, 1, 1))   # Capodanno
-    holidays.add(date(2025, 1, 6))   # Epifania
-    holidays.add(date(2025, 4, 25))  # Liberazione
-    holidays.add(date(2025, 5, 1))   # Festa del Lavoro
-    holidays.add(date(2025, 6, 2))   # Festa della Repubblica
-    holidays.add(date(2025, 11, 1))  # Ognissanti
-    holidays.add(date(2025, 8, 15))  # Ferragosto
-    holidays.add(date(2025, 12, 8))  # Immacolata
-    holidays.add(date(2025, 12, 25)) # Natale
-    holidays.add(date(2025, 12, 26)) # Santo Stefano
-    
-    # Pasqua e Pasquetta 2025 (calcolate dinamicamente)
-    from datetime import timedelta
-    easter_2025 = easter(2025)
-    holidays.add(easter_2025)              # Pasqua
-    holidays.add(easter_2025 + timedelta(days=1))  # Pasquetta
-    
+    for y in (2025, 2026, 2027):
+        _add_italian_holidays_for_year(holidays, y)
     return holidays
 
 
@@ -796,8 +787,19 @@ def validate_file_complete(file_path: str, to_keyword: str = "alpitour", apt_fil
 
 
 def iter_excel_sheets(file_path: str) -> Iterable[Tuple[str, pd.DataFrame]]:
+    """Itera sui fogli del file Excel. Legge solo 'PIANO VOLI' se presente, altrimenti tutti i fogli (retrocompatibilità)"""
     xls = pd.ExcelFile(file_path)
+    # Cerca il foglio "PIANO VOLI" (nuovo formato)
+    target_sheet = None
     for sheet in xls.sheet_names:
+        if sheet.upper().strip() == "PIANO VOLI":
+            target_sheet = sheet
+            break
+    
+    # Se trova "PIANO VOLI", leggi solo quello, altrimenti tutti (retrocompatibilità)
+    sheets_to_process = [target_sheet] if target_sheet else xls.sheet_names
+    
+    for sheet in sheets_to_process:
         df = pd.read_excel(file_path, sheet_name=sheet)
         yield sheet, df
 
@@ -1527,24 +1529,8 @@ def _create_assistenti_vrn_sheet_legacy(df_vrn: pd.DataFrame) -> pd.DataFrame:
     MAGG_NOTTURNA_PERC = 0.15  # +15% proporzionale
     MAGG_FESTIVO_PERC = 0.20  # +20% su tutto
     
-    # Festivi (dal documento)
-    from datetime import date
-    festivi_2025 = {
-        date(2025, 12, 25),  # Natale
-        date(2025, 12, 26),  # Santo Stefano
-        date(2025, 1, 1),    # Capodanno
-        date(2025, 1, 6),    # Epifania
-        date(2025, 4, 25),   # Liberazione
-        date(2025, 5, 1),    # Festa del Lavoro
-        date(2025, 6, 2),    # Festa della Repubblica
-        date(2025, 8, 15),   # Ferragosto
-        date(2025, 11, 1),   # Ognissanti
-        date(2025, 12, 8),   # Immacolata
-    }
-    # Aggiungi Pasqua e Pasquetta 2025
-    easter_2025 = easter(2025)
-    festivi_2025.add(easter_2025)
-    festivi_2025.add(easter_2025 + pd.Timedelta(days=1))
+    # Festivi (stessa lista di get_italian_holidays_2025, include 2025-2027)
+    festivi_2025 = get_italian_holidays_2025()
     
     def calcola_turno_assistente(durata_min):
         """Calcola turno assistente: 58€ base + 12€/h oltre 3h"""

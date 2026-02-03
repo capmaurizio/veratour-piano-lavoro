@@ -342,27 +342,28 @@ def compute_night_eur(night_min: int, apt: str) -> float:
     return night_min * get_night_tariffa(apt)
 
 
+def _add_italian_holidays_for_year(holidays: set, year: int) -> None:
+    """Aggiunge i festivi italiani per un dato anno."""
+    holidays.add(date(year, 1, 1))
+    holidays.add(date(year, 1, 6))
+    holidays.add(date(year, 4, 25))
+    holidays.add(date(year, 5, 1))
+    holidays.add(date(year, 6, 2))
+    holidays.add(date(year, 11, 1))
+    holidays.add(date(year, 8, 15))
+    holidays.add(date(year, 12, 8))
+    holidays.add(date(year, 12, 25))
+    holidays.add(date(year, 12, 26))
+    e = easter(year)
+    holidays.add(e)
+    holidays.add(e + timedelta(days=1))
+
+
 def get_italian_holidays_2025() -> set[date]:
-    """Restituisce set di date festivi italiani 2025"""
+    """Restituisce set di date festivi italiani (2025, 2026, 2027) per piani lavoro 2026+."""
     holidays = set()
-    
-    # Festivi fissi 2025
-    holidays.add(date(2025, 1, 1))   # Capodanno
-    holidays.add(date(2025, 1, 6))   # Epifania
-    holidays.add(date(2025, 4, 25))  # Liberazione
-    holidays.add(date(2025, 5, 1))   # Festa del Lavoro
-    holidays.add(date(2025, 6, 2))   # Festa della Repubblica
-    holidays.add(date(2025, 11, 1))  # Ognissanti
-    holidays.add(date(2025, 8, 15))  # Ferragosto
-    holidays.add(date(2025, 12, 8))  # Immacolata
-    holidays.add(date(2025, 12, 25)) # Natale
-    holidays.add(date(2025, 12, 26)) # Santo Stefano
-    
-    # Pasqua 2025 (calcolata)
-    easter_2025 = easter(2025)
-    holidays.add(easter_2025)              # Pasqua
-    holidays.add(easter_2025 + timedelta(days=1))  # Pasquetta
-    
+    for y in (2025, 2026, 2027):
+        _add_italian_holidays_for_year(holidays, y)
     return holidays
 
 
@@ -389,7 +390,8 @@ def detect_columns(df: pd.DataFrame) -> Dict[str, Optional[str]]:
     return {
         "data": find_col(df, [r"^DATA$", r"\bDATE\b"]),
         "tour_operator": find_col(df, [r"TOUR\s*OPERATOR", r"^TO$", r"\bOPERATORE\b"]),
-        "compagnia": find_col(df, [r"^VOLO$", r"^COMPAGNIA$", r"^AIRLINE$", r"\bCOMPAGNIA\s*AEREA\b", r"\bAIRLINE\b"]),  # Per rilevare compagnia aerea (cerca prima VOLO)
+        "volo": find_col(df, [r"^volo$", r"numero\s*volo", r"n\.?\s*volo", r"flight"]),
+        "compagnia": find_col(df, [r"^COMPAGNIA$", r"^AIRLINE$", r"\bCOMPAGNIA\s*AEREA\b", r"\bAIRLINE\b"]),  # Per rilevare compagnia aerea
         "apt": find_col(df, [r"^APT$", r"\bAEROPORTO\b", r"\bSCALO\b"]),
         "turno": find_col(df, [r"^TURNO$", r"^TURNO\s*ASSISTENTE$", r"\bTURNI\b"]),
         "atd": find_col(df, [r"^ATD$", r"\bORARIO\s*ATD\b"]),
@@ -432,14 +434,25 @@ class BlockAgg:
     assistente: Optional[str] = None
     tour_operator_originale: Optional[str] = None  # TOUR OPERATOR originale dalla riga
     compagnia: Optional[str] = None  # Compagnia aerea (per rilevare Wizzair)
+    volo: Optional[str] = None  # Numero di volo
     cvc_minuti_extra: int = 0  # Minuti extra da CVC (es. CVC30 = 30 min, CVC60 = 60 min)
     errore: Optional[str] = None  # Messaggio di errore se i dati non sono validi
 
 
 def iter_excel_sheets(file_path: str) -> Iterable[Tuple[str, pd.DataFrame]]:
-    """Itera su tutti i fogli del file Excel"""
+    """Itera sui fogli del file Excel. Legge solo 'PIANO VOLI' se presente, altrimenti tutti i fogli (retrocompatibilità)"""
     xls = pd.ExcelFile(file_path)
+    # Cerca il foglio "PIANO VOLI" (nuovo formato)
+    target_sheet = None
     for sheet in xls.sheet_names:
+        if sheet.upper().strip() == "PIANO VOLI":
+            target_sheet = sheet
+            break
+    
+    # Se trova "PIANO VOLI", leggi solo quello, altrimenti tutti (retrocompatibilità)
+    sheets_to_process = [target_sheet] if target_sheet else xls.sheet_names
+    
+    for sheet in sheets_to_process:
         df = pd.read_excel(file_path, sheet_name=sheet)
         yield sheet, df
 
@@ -556,6 +569,14 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                         else:
                             tour_operator_orig = to_val
                 
+                # Estrai VOLO (numero di volo)
+                volo_val = None
+                volo_col = cols.get("volo")
+                if volo_col and volo_col in r.index:
+                    volo_raw = str(r[volo_col]).strip() if pd.notna(r[volo_col]) else None
+                    if volo_raw and volo_raw.lower() not in ["nan", "none", ""]:
+                        volo_val = volo_raw
+                
                 # Estrai COMPAGNIA (per rilevare Wizzair)
                 compagnia_val = None
                 if cols["compagnia"] and cols["compagnia"] in r.index:
@@ -565,12 +586,14 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                 
                 # Riconosci Wizzair dal codice volo: cerca "W4" nel codice (es. W46179, W4 6117)
                 is_wizzair = False
-                if compagnia_val:
+                # Prima verifica nel volo, poi nella compagnia
+                volo_to_check = volo_val if volo_val else compagnia_val
+                if volo_to_check:
                     # Cerca "W4" nel codice volo (può essere "W46179" o "W4 6117")
-                    if "W4" in compagnia_val.upper() or compagnia_val.upper().startswith("W4"):
+                    if "W4" in volo_to_check.upper() or volo_to_check.upper().startswith("W4"):
                         is_wizzair = True
-                        # Normalizza il nome compagnia per Wizzair
-                        if not compagnia_val.upper().startswith("WIZZAIR"):
+                        # Normalizza il nome compagnia per Wizzair se non già presente
+                        if compagnia_val and not compagnia_val.upper().startswith("WIZZAIR"):
                             compagnia_val = f"Wizzair ({compagnia_val})"
                 
                 # Estrai minuti CVC da NOTE o TURNO/TURNI (es. CVC30 = 30 min, CVC60 = 60 min)
@@ -666,6 +689,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                         assistente=assistente_val if assistente_val else None,
                         tour_operator_originale=tour_operator_orig,
                         compagnia=compagnia_val if compagnia_val else None,
+                        volo=volo_val if volo_val else None,
                         cvc_minuti_extra=cvc_minuti,
                     )
 
@@ -757,14 +781,29 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
         # Usa TOUR OPERATOR originale salvato nel blocco
         tour_operator_val = b.tour_operator_originale if b.tour_operator_originale else "Baobab"
         
+        # Calcola TURNO_NORMALIZZATO da start_baobab ed end_baobab se disponibili
+        # Questo è più accurato quando il turno viene calcolato da STD/ATD
+        turno_normalizzato = b.turno_norm
+        if not pd.isna(start_baobab) and not pd.isna(end_baobab):
+            # Formatta gli orari
+            start_str = start_baobab.strftime("%H:%M")
+            end_str = end_baobab.strftime("%H:%M")
+            turno_normalizzato = f"{start_str}-{end_str}"
+        elif not pd.isna(b.start_dt) and not pd.isna(b.end_dt):
+            # Fallback: usa i datetime originali se start_baobab/end_baobab non disponibili
+            start_str = b.start_dt.strftime("%H:%M")
+            end_str = b.end_dt.strftime("%H:%M")
+            turno_normalizzato = f"{start_str}-{end_str}"
+        
         rows_detail.append({
             "DATA": b.date.strftime("%d/%m/%Y") if pd.notna(b.date) else "",
             "APT": b.apt,
             "TOUR OPERATOR": tour_operator_val,
             "COMPAGNIA": b.compagnia if b.compagnia else "",
             "ASSISTENTE": b.assistente if b.assistente else "",
+            "VOLO": b.volo if b.volo else "",
             "TURNO_FFILL": b.turno_raw_ffill,
-            "TURNO_NORMALIZZATO": b.turno_norm,
+            "TURNO_NORMALIZZATO": turno_normalizzato,
             "INIZIO_DT": start_baobab if not pd.isna(start_baobab) else b.start_dt,
             "FINE_DT": end_baobab if not pd.isna(end_baobab) else b.end_dt,
             "DURATA_TURNO_MIN": durata_effettiva_min,

@@ -394,7 +394,18 @@ def detect_tour_operators(file_path: str) -> Tuple[Set[str], Set[str]]:
     
     try:
         xls = pd.ExcelFile(file_path)
+        # Leggi solo il foglio "PIANO VOLI" (nuovo formato)
+        # Se non esiste, prova con tutti i fogli (retrocompatibilità)
+        target_sheet = None
         for sheet_name in xls.sheet_names:
+            if sheet_name.upper().strip() == "PIANO VOLI":
+                target_sheet = sheet_name
+                break
+        
+        # Se non trova "PIANO VOLI", usa tutti i fogli (retrocompatibilità)
+        sheets_to_process = [target_sheet] if target_sheet else xls.sheet_names
+        
+        for sheet_name in sheets_to_process:
             df = pd.read_excel(file_path, sheet_name=sheet_name)
             if df is None or df.empty:
                 continue

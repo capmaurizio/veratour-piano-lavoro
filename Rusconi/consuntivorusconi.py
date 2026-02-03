@@ -322,27 +322,28 @@ def compute_night_eur(night_min: int, base_eur: float, extra_eur: float) -> floa
     return night_min * TARIFFA_NOTTE_RUSCONI
 
 
+def _add_italian_holidays_for_year(holidays: set, year: int) -> None:
+    """Aggiunge i festivi italiani per un dato anno."""
+    holidays.add(date(year, 1, 1))
+    holidays.add(date(year, 1, 6))
+    holidays.add(date(year, 4, 25))
+    holidays.add(date(year, 5, 1))
+    holidays.add(date(year, 6, 2))
+    holidays.add(date(year, 11, 1))
+    holidays.add(date(year, 8, 15))
+    holidays.add(date(year, 12, 8))
+    holidays.add(date(year, 12, 25))
+    holidays.add(date(year, 12, 26))
+    e = easter(year)
+    holidays.add(e)
+    holidays.add(e + timedelta(days=1))
+
+
 def get_italian_holidays_2025() -> set[date]:
-    """Restituisce set di date festivi italiani 2025"""
+    """Restituisce set di date festivi italiani (2025, 2026, 2027) per piani lavoro 2026+."""
     holidays = set()
-    
-    # Festivi fissi 2025
-    holidays.add(date(2025, 1, 1))   # Capodanno
-    holidays.add(date(2025, 1, 6))   # Epifania
-    holidays.add(date(2025, 4, 25))  # Liberazione
-    holidays.add(date(2025, 5, 1))   # Festa del Lavoro
-    holidays.add(date(2025, 6, 2))   # Festa della Repubblica
-    holidays.add(date(2025, 11, 1))  # Ognissanti
-    holidays.add(date(2025, 8, 15))  # Ferragosto
-    holidays.add(date(2025, 12, 8))  # Immacolata
-    holidays.add(date(2025, 12, 25)) # Natale
-    holidays.add(date(2025, 12, 26)) # Santo Stefano
-    
-    # Pasqua 2025 (calcolata)
-    easter_2025 = easter(2025)
-    holidays.add(easter_2025)              # Pasqua
-    holidays.add(easter_2025 + timedelta(days=1))  # Pasquetta
-    
+    for y in (2025, 2026, 2027):
+        _add_italian_holidays_for_year(holidays, y)
     return holidays
 
 
@@ -373,7 +374,7 @@ def detect_columns(df: pd.DataFrame) -> Dict[str, Optional[str]]:
         "turno": find_col(df, [r"^TURNO$", r"^TURNO\s*ASSISTENTE$", r"\bTURNI\b"]),
         "atd": find_col(df, [r"^ATD$", r"\bORARIO\s*ATD\b"]),
         "std": find_col(df, [r"^STD$", r"\bORARIO\s*STD\b"]),
-        "passeggeri": find_col(df, [r"^PASSEGGERI$", r"\bPAX\b", r"\bPASSENGERS\b", r"\bPASS\b"]),  # Per carte di imbarco
+        "passeggeri": find_col(df, [r"^PASSEGGERI$", r"^NUMERO\s*PAX$", r"\bPAX\b", r"\bPASSENGERS\b", r"\bPASS\b"]),  # Per carte di imbarco
         "importo": find_col(df, [r"^IMPORTO$", r"\bTOTALE\b", r"^COSTO\s*$"]),
         "ore_extra": find_col(df, [r"\bORE\s*EXTRA\b", r"^EXTRA$", r"\bEXTRA\s*(MIN|ORE)\b"]),
         "notturno": find_col(df, [r"^NOTTURNO$", r"\bNIGHT\b"]),
@@ -414,9 +415,19 @@ class BlockAgg:
 
 
 def iter_excel_sheets(file_path: str) -> Iterable[Tuple[str, pd.DataFrame]]:
-    """Itera su tutti i fogli del file Excel"""
+    """Itera sui fogli del file Excel. Legge solo 'PIANO VOLI' se presente, altrimenti tutti i fogli (retrocompatibilità)"""
     xls = pd.ExcelFile(file_path)
+    # Cerca il foglio "PIANO VOLI" (nuovo formato)
+    target_sheet = None
     for sheet in xls.sheet_names:
+        if sheet.upper().strip() == "PIANO VOLI":
+            target_sheet = sheet
+            break
+    
+    # Se trova "PIANO VOLI", leggi solo quello, altrimenti tutti (retrocompatibilità)
+    sheets_to_process = [target_sheet] if target_sheet else xls.sheet_names
+    
+    for sheet in sheets_to_process:
         df = pd.read_excel(file_path, sheet_name=sheet)
         yield sheet, df
 
