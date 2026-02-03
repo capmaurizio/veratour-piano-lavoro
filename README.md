@@ -14,11 +14,11 @@ L'applicazione è protetta con sistema di login:
 CalcoloPianoLavoro/
 ├── app_streamlit.py           # 🚀 Interfaccia web principale (ROOT)
 ├── requirements.txt           # Dipendenze Python
+├── Documentazione/            # Deploy, calcolo, FAQ (INDICE.md, DEPLOY.md, ecc.)
 ├── Veratour/                  # Calcolatore Veratour 2025
 │   ├── consuntivoveratour.py  # Logica calcolo Veratour
 │   ├── requirements.txt
 │   ├── Assistenti/            # Documenti accordi assistenti VRN
-│   └── documentazione/
 ├── Alpitour/                  # Calcolatore Alpitour
 │   ├── consuntivoalpitour.py  # Logica calcolo Alpitour
 │   └── ...
@@ -111,7 +111,7 @@ L'app si aprirà su `http://localhost:8501`
 - **Modulo**: `Veratour/consuntivoveratour.py`
 - **Calcolo**: Turni, extra, notturno, festivi, assistenti VRN
 - **Aeroporti**: VRN, BGY, NAP, VCE
-- **Documentazione**: `Veratour/documentazione/INDICE.md`
+- **Documentazione**: `Documentazione/INDICE.md`
 - **Caratteristiche speciali**: Calcolo automatico stipendi assistenti VRN
 
 ### ✅ Alpitour
@@ -327,7 +327,7 @@ elif '[nome]' in to_clean:
 - **README.md** (questo file): Panoramica sistema multi-tour operatour
 
 ### Documentazione Tour Operator Specifici
-- **Veratour**: `Veratour/documentazione/INDICE.md`
+- **Veratour**: `Documentazione/INDICE.md`
 - **Aliservice**: `Aliservice/REGOLE CHAT GPT SCAYGROUP_PEOPLE ON THE MOVE_2025.docx`
 - **Baobab**: `Baobab/TARIFFE BAOBAB TH 26.docx`
 - **Domina**: `Domina/Regoledicalcolodomina.txt`
@@ -341,6 +341,8 @@ elif '[nome]' in to_clean:
 - `Aliservice/ACCORDO DI COLLABORAZIONE SCAY-PEOPLE 2025.pdf`: Accordo Aliservice
 
 ## 🌐 Deploy
+
+**Il repository del progetto è su GitHub** (non su GitLab).
 
 L'applicazione è deployata su **Streamlit Cloud**:
 - **URL**: https://veratour-piano-lavoro-8ahkfuaued3a59zwb5dwsb.streamlit.app

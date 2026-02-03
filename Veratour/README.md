@@ -63,11 +63,11 @@ python3 consuntivoveratour.py -i "Piano lavoro DICEMBRE 25.xlsx" -o "OUT_DIC.xls
 
 ## 📚 Documentazione
 
-Tutta la documentazione dettagliata è nella cartella `documentazione/`:
-- **[INDICE.md](documentazione/INDICE.md)**: Indice completo
-- **[README_calcolo.md](documentazione/README_calcolo.md)**: Metodo di calcolo completo
-- **[README_STREAMLIT.md](documentazione/README_STREAMLIT.md)**: Guida interfaccia web
-- **[DEPLOY.md](documentazione/DEPLOY.md)**: Guida deploy su Streamlit Cloud
+La documentazione dettagliata è nella cartella **`Documentazione/`** nella root del progetto:
+- **[INDICE.md](../Documentazione/INDICE.md)**: Indice completo
+- **[README_calcolo.md](../Documentazione/README_calcolo.md)**: Metodo di calcolo completo
+- **[README_STREAMLIT.md](../Documentazione/README_STREAMLIT.md)**: Guida interfaccia web
+- **[DEPLOY.md](../Documentazione/DEPLOY.md)**: Guida deploy su Streamlit Cloud
 
 ## 🌐 Deploy
 

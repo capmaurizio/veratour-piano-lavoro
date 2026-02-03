@@ -1,6 +1,6 @@
 # 📚 Indice Documentazione
 
-Questa cartella contiene tutta la documentazione del progetto Veratour 2025.
+Questa cartella (nella **root del progetto**) contiene la documentazione di deploy, calcolo e uso dell'app (Veratour e multi–tour operator).
 
 ## 📖 Documenti Principali
 
