@@ -1118,7 +1118,15 @@ def write_output_excel(output_path: str, detail_df: pd.DataFrame, totals_df: pd.
                 "SRC_FILE", "SRC_SHEET", "SRC_ROW0",
             ]
             cols = [c for c in cols if c in detail_df.columns]
-            detail_df[cols].to_excel(writer, sheet_name="DettaglioBlocchi", index=False)
+            # Formatta colonne minuti in HH:MM per DettaglioBlocchi
+            def min_to_hmm(m):
+                if pd.isna(m): return ""
+                return f"{int(m)//60}:{int(m)%60:02d}"
+            write_df = detail_df[cols].copy()
+            for col in ["DURATA_TURNO_MIN", "EXTRA_MIN_RAW", "EXTRA_MIN", "NOTTE_MIN_RAW", "NOTTE_MIN"]:
+                if col in write_df.columns:
+                    write_df[col] = write_df[col].apply(min_to_hmm)
+            write_df.to_excel(writer, sheet_name="DettaglioBlocchi", index=False)
         else:
             pd.DataFrame().to_excel(writer, sheet_name="DettaglioBlocchi", index=False)
 
