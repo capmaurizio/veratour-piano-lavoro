@@ -6,7 +6,7 @@ Sistema modulare per il calcolo automatico dei consuntivi piano di lavoro per di
 
 L'applicazione è protetta con sistema di login:
 - **Username**: `skypemiao`
-- **Password**: `jfjdljf3244a?091`
+- **Password**: `1`
 
 ## 🏗️ Struttura Progetto
 

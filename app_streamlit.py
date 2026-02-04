@@ -316,7 +316,7 @@ st.markdown("""
 
 # Credenziali di accesso
 VALID_USERNAME = "skypemiao"
-VALID_PASSWORD = "jfjdljf3244a?091"
+VALID_PASSWORD = "1"
 
 # Inizializza session_state per autenticazione
 if 'authenticated' not in st.session_state:
