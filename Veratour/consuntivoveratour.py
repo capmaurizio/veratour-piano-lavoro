@@ -117,7 +117,7 @@ TIME_SEP_PATTERN = r"[-–—]"
 TIME_TOKEN = r"(?:(\d{1,2})(?:[:\.](\d{1,2}))?)"
 TIME_RANGE_RE = re.compile(rf"{TIME_TOKEN}\s*{TIME_SEP_PATTERN}\s*{TIME_TOKEN}", re.IGNORECASE)
 
-NO_DEC_RE = re.compile(r"no\s*dec", re.IGNORECASE)
+NO_DEC_RE = re.compile(r"\bno\s*dec\b", re.IGNORECASE)
 
 
 def normalize_spaces(s: str) -> str:
