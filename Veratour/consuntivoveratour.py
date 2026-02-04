@@ -743,6 +743,10 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
 
         # Extra minutes (raw) then rounding policy (optional)
         extra_min_raw = compute_extra_min(atd_sel, b.end_dt, b.no_dec)
+        # Safeguard: se nel turno c'è "NO DEC" (testo) azzeriamo sempre gli extra
+        # (evita errori da ffill o parsing che perdono il flag no_dec)
+        if "no dec" in (b.turno_raw_ffill or "").lower() or "no dec" in (b.turno_norm or "").lower():
+            extra_min_raw = 0
         extra_min = cfg.rounding_extra.apply(extra_min_raw)
 
         extra_eur = (extra_min / 60.0) * cfg.rate_extra_per_h
