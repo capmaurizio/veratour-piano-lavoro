@@ -315,7 +315,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Credenziali di accesso
-VALID_USERNAME = "skypemiao"
+VALID_USERNAME = "silvia"
 VALID_PASSWORD = "1"
 
 # Inizializza session_state per autenticazione
