@@ -178,30 +178,46 @@ def calculate_tariffa_from_inputs(
     # Verifica se è festivo
     is_festivo = False
     if data_turno:
-        # Calcola festivi italiani 2026
+        # Per FCO usa festivi specifici (include 29/6 Santi Pietro e Paolo)
+        # Per altri aeroporti usa festivi nazionali standard
         try:
-            from dateutil.easter import easter
+            from tariffe_collaboratori import get_fco_holidays, get_italian_holidays_2025
+            apt_upper = apt.upper().strip() if apt else ''
+            if apt_upper == 'FCO':
+                holidays = get_fco_holidays()
+            else:
+                holidays = get_italian_holidays_2025()
         except ImportError:
-            def easter(year: int) -> date:
-                a = year % 19
-                b = year // 100
-                c = year % 100
-                d = (19 * a + b - b // 4 - ((b - (b + 8) // 25 + 1) // 3) + 15) % 30
-                e = (32 + 2 * (b % 4) + 2 * (c // 4) - d - (c % 4)) % 7
-                f = d + e - 7 * ((a + 11 * d + 22 * e) // 451) + 114
-                month = f // 31
-                day = (f % 31) + 1
-                return date(year, month, day)
-        
-        holidays = {
-            date(2026, 1, 1), date(2026, 1, 6), date(2026, 4, 25),
-            date(2026, 5, 1), date(2026, 6, 2), date(2026, 8, 15),
-            date(2026, 11, 1), date(2026, 12, 8), date(2026, 12, 25), date(2026, 12, 26)
-        }
-        easter_2026 = easter(2026)
-        holidays.add(easter_2026)
-        from datetime import timedelta
-        holidays.add(easter_2026 + timedelta(days=1))
+            # Fallback: calcola festivi manualmente
+            try:
+                from dateutil.easter import easter
+            except ImportError:
+                def easter(year: int) -> date:
+                    a = year % 19
+                    b = year // 100
+                    c = year % 100
+                    d = (19 * a + b - b // 4 - ((b - (b + 8) // 25 + 1) // 3) + 15) % 30
+                    e = (32 + 2 * (b % 4) + 2 * (c // 4) - d - (c % 4)) % 7
+                    f = d + e - 7 * ((a + 11 * d + 22 * e) // 451) + 114
+                    month = f // 31
+                    day = (f % 31) + 1
+                    return date(year, month, day)
+            
+            holidays = set()
+            for year in (2025, 2026, 2027):
+                holidays.update({
+                    date(year, 1, 1), date(year, 1, 6), date(year, 4, 25),
+                    date(year, 5, 1), date(year, 6, 2), date(year, 8, 15),
+                    date(year, 11, 1), date(year, 12, 8), date(year, 12, 25), date(year, 12, 26)
+                })
+                easter_date = easter(year)
+                holidays.add(easter_date)
+                from datetime import timedelta
+                holidays.add(easter_date + timedelta(days=1))
+                # 29/6 per FCO (Santi Pietro e Paolo)
+                apt_upper = apt.upper().strip() if apt else ''
+                if apt_upper == 'FCO':
+                    holidays.add(date(year, 6, 29))
         
         if data_turno in holidays:
             is_festivo = True

@@ -46,6 +46,11 @@ def _add_italian_holidays_for_year(holidays: set, year: int) -> None:
     holidays.add(e + timedelta(days=1))  # Pasquetta
 
 
+def _add_fco_holidays_for_year(holidays: set, year: int) -> None:
+    """Aggiunge i festivi specifici per FCO (Santi Pietro e Paolo, patroni di Roma)."""
+    holidays.add(date(year, 6, 29))  # Santi Pietro e Paolo (patronale Roma/FCO)
+
+
 def get_italian_holidays_2025() -> set:
     """
     Calcola i festivi italiani per il 2025 (e 2026, 2027).
@@ -54,6 +59,17 @@ def get_italian_holidays_2025() -> set:
     holidays = set()
     for y in (2025, 2026, 2027):
         _add_italian_holidays_for_year(holidays, y)
+    return holidays
+
+
+def get_fco_holidays() -> set:
+    """
+    Calcola i festivi per FCO (nazionali + 29/6 Santi Pietro e Paolo).
+    Da usare lato assistenti FCO (Accordo Assistenti FCO 2026).
+    """
+    holidays = get_italian_holidays_2025()
+    for y in (2025, 2026, 2027):
+        _add_fco_holidays_for_year(holidays, y)
     return holidays
 
 
@@ -82,6 +98,7 @@ class TariffaCollaboratore:
     notturno_perc: Optional[float] = None  # Percentuale (es. 0.15 per +15%)
     notturno_fascia: Optional[str] = None  # Fascia oraria (es. "23:00-06:00")
     festivo_perc: Optional[float] = None  # Percentuale (es. 0.20 per +20%)
+    inps_perc: Optional[float] = None  # Percentuale INPS (es. 0.04 per +4%, per P.IVA)
     
     # Note
     note: Optional[str] = None
@@ -665,6 +682,143 @@ def calcola_tariffa_collaboratore(
                 'totale_eur': round(scorpora_netto(totale_lordo, regime), 2)
             }
     
+    # 1b. VRN - Tariffe Verona Junior/Senior (Accordo 2025/2024)
+    # Pacchetto a scalini per Veratour/Alpitour:
+    #   Junior: 3h=€50, 4h=€62, 5h=€74, 6h=€86, 7h=€98, 8h=€110 (extra €12/h)
+    #   Senior: 3h=€58, 4h=€70, 5h=€82, 6h=€94, 7h=€106, 8h=€118 (extra €12/h)
+    # Notturno +15%: Alpitour/Baobab/TH/Domina 22:00-06:00, Veratour 23:00-05:00(J)/23:00-03:30(S)
+    # SAND: no extra, SÌ notturno 23:00-03:30
+    # Festivo: +20%
+    # Transfer: €45/2h (junior)
+    if apt_upper == 'VRN':
+        # Classificazione Junior/Senior per nome assistente
+        VRN_SENIOR = {
+            'ROSITA CAVALLARO', 'EMANUELA MONESE', 'ALESSANDRA CONSOLINI',
+            'CAVALLARO ROSITA', 'MONESE EMANUELA', 'CONSOLINI ALESSANDRA',
+        }
+        VRN_JUNIOR = {
+            'SAVERIO BONINI', 'LUCA DE LAURENTIS', 'LUCA TOSONI', 'MARTA LUCCHETTI',
+            'BONINI SAVERIO', 'DE LAURENTIS LUCA', 'TOSONI LUCA', 'LUCCHETTI MARTA',
+        }
+        
+        nome_upper = nome.upper().strip() if nome else ''
+        
+        # Determina Junior/Senior (anche da Excel se disponibile)
+        is_senior = False
+        is_junior = False
+        if nome_upper in VRN_SENIOR:
+            is_senior = True
+        elif nome_upper in VRN_JUNIOR:
+            is_junior = True
+        else:
+            # Fallback: usa categoria dal file Excel se disponibile
+            categoria = tariffa.categoria if tariffa else None
+            categoria_str = str(categoria).strip().upper() if categoria else ''
+            if 'SENIOR' in categoria_str:
+                is_senior = True
+            elif 'JUNIOR' in categoria_str or 'YUNIOR' in categoria_str:
+                is_junior = True
+            else:
+                # Default: Senior (tariffa più alta, prudenziale)
+                is_senior = True
+        
+        # Regime fiscale hardcoded per VRN (Accordo 2026)
+        # Senior: tutte con Partita IVA
+        # Junior Bonini: Partita IVA
+        # Junior De Laurentis, Tosoni, Lucchetti: occasionali con ritenuta d'acconto 20%
+        if is_senior:
+            regime_override = 'Partita IVA'
+        elif nome_upper in {'SAVERIO BONINI', 'BONINI SAVERIO'}:
+            regime_override = 'Partita IVA'
+        else:
+            # De Laurentis, Tosoni, Lucchetti: occasionali, ritenuta 20%
+            regime_override = "Ritenuta d'acconto"
+        
+        # SAND: regole specifiche (no extra, SÌ notturno 23:00-03:30)
+        to_upper = str(tour_operator).upper().strip() if tour_operator else ''
+        is_sand = 'SAND' in to_upper
+        
+        # Transfer
+        is_transfer = tipo_servizio and 'transfer' in str(tipo_servizio).lower()
+        
+        if is_transfer:
+            # Transfer: €45/2h (junior), extra €12/h
+            base_eur = 45.0
+            durata_base_h = 2.0
+            extra_eur_per_h = 12.0
+            notturno_perc = 0.15
+        elif is_senior:
+            # PACCHETTO SENIOR (Veratour/Alpitour e altri TO)
+            # Scalini: 3h=€58, 4h=€70, 5h=€82, 6h=€94, 7h=€106, 8h=€118
+            pacchetti_senior = {3: 58.0, 4: 70.0, 5: 82.0, 6: 94.0, 7: 106.0, 8: 118.0}
+            durata_h = durata_min / 60.0
+            ore_intere = max(3, min(8, int(durata_h))) if durata_h >= 3 else 3
+            base_eur = pacchetti_senior.get(ore_intere, 58.0)
+            durata_base_h = float(ore_intere)
+            extra_eur_per_h = 12.0
+            notturno_perc = 0.15
+        else:
+            # PACCHETTO JUNIOR (Veratour/Alpitour e altri TO)
+            # Scalini: 3h=€50, 4h=€62, 5h=€74, 6h=€86, 7h=€98, 8h=€110
+            pacchetti_junior = {3: 50.0, 4: 62.0, 5: 74.0, 6: 86.0, 7: 98.0, 8: 110.0}
+            durata_h = durata_min / 60.0
+            ore_intere = max(3, min(8, int(durata_h))) if durata_h >= 3 else 3
+            base_eur = pacchetti_junior.get(ore_intere, 50.0)
+            durata_base_h = float(ore_intere)
+            extra_eur_per_h = 12.0
+            notturno_perc = 0.15
+        
+        # Calcola base
+        base = base_eur
+        durata_h = durata_min / 60.0
+        
+        # Calcola extra (ore oltre il pacchetto assegnato)
+        if is_sand:
+            extra = 0.0  # SAND: no extra
+        else:
+            ore_extra_base = max(0, durata_h - durata_base_h)
+            extra = ore_extra_base * extra_eur_per_h
+            # Extra per ritardi ATD
+            if extra_min > 0:
+                extra += (extra_min / 60.0) * extra_eur_per_h
+        
+        # Calcola notturno +15% (anche per SAND con fascia 23:00-03:30)
+        if minuti_notturni <= 0:
+            notte = 0.0
+        else:
+            valore_orario = base_eur / durata_base_h if durata_base_h > 0 else 0.0
+            ore_notturne = minuti_notturni / 60.0
+            valore_parte_notturna = valore_orario * ore_notturne
+            notte = valore_parte_notturna * notturno_perc
+        
+        # Totale
+        subtotale = base + extra + notte
+        festivo_perc = 0.20  # +20%
+        if is_festivo:
+            totale_lordo = subtotale * (1 + festivo_perc)
+        else:
+            totale_lordo = subtotale
+        
+        # Scorporo netto (regime hardcoded per VRN)
+        regime = regime_override
+        def scorpora_netto(lordo: float, regime_val: Optional[str]) -> float:
+            if not regime_val:
+                return lordo * 0.80
+            regime_str = str(regime_val).strip().upper()
+            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str:
+                return lordo
+            elif 'RITENUTA' in regime_str or 'ACCONTO' in regime_str:
+                return lordo * 0.80
+            else:
+                return lordo * 0.80
+        
+        return {
+            'base_eur': round(scorpora_netto(base, regime), 2),
+            'extra_eur': round(scorpora_netto(extra, regime), 2),
+            'notte_eur': round(scorpora_netto(notte, regime), 2),
+            'totale_eur': round(scorpora_netto(totale_lordo, regime), 2)
+        }
+    
     # 2. FCO - Tariffe Incentive (REGOLE OPERATIVE 2026)
     if apt_upper == 'FCO' and tipo_servizio and 'incentive' in str(tipo_servizio).lower():
         # Assistenza incentive: €60,00 + IVA per 2h30'
@@ -780,15 +934,185 @@ def calcola_tariffa_collaboratore(
             'totale_eur': round(scorpora_netto(totale_lordo, regime), 2)
         }
     
-    # 4. NAP - Tariffe Transfer (REGOLE OPERATIVE 2026)
+    # 3b. NAP - Tariffe Standard Partenze (Accordo Collaboratori Napoli Senior 2026)
+    # Assistenza base: €56,00 + IVA per 3h
+    # Ore extra: €12,00 + IVA all'ora
+    # Notturno +15%:
+    #   - Veratour: 23:00-05:00
+    #   - Baobab/TH/Domina/Rusconi/Micheltours: 23:00-06:00
+    #   - SAND: 23:00-03:30
+    # Festivo: +20%
+    # Transfer Veratour: €50, Meet&Greet altri TO: €56
+    # Incentive (Iantra): €60/2h30' + extra €15/h
+    if apt_upper == 'NAP' and (tipo_servizio is None or tipo_servizio == '' or tipo_servizio == 'standard'):
+        # Classificazione Junior/Senior per nome assistente
+        NAP_SENIOR = {
+            'PAOLO IMPERATO', 'ROBERTA CASCIELLO', 'ANGELA DI GIORGIO',
+            'IMPERATO PAOLO', 'CASCIELLO ROBERTA', 'DI GIORGIO ANGELA',
+        }
+        NAP_JUNIOR = {
+            'CAMILLA MIGNOGNA', 'SARA MERENDA', 'RITA ORSO',
+            'MIGNOGNA CAMILLA', 'MERENDA SARA', 'ORSO RITA',
+        }
+        
+        nome_upper = nome.upper().strip() if nome else ''
+        
+        # Determina Junior/Senior
+        is_senior = False
+        is_junior = False
+        if nome_upper in NAP_SENIOR:
+            is_senior = True
+        elif nome_upper in NAP_JUNIOR:
+            is_junior = True
+        else:
+            # Fallback: usa categoria dal file Excel
+            categoria = tariffa.categoria if tariffa else None
+            categoria_str = str(categoria).strip().upper() if categoria else ''
+            if 'SENIOR' in categoria_str:
+                is_senior = True
+            elif 'JUNIOR' in categoria_str or 'YUNIOR' in categoria_str:
+                is_junior = True
+            else:
+                is_senior = True  # Default prudenziale
+        
+        # NAP tariffe differenziate Junior/Senior (Accordo 2026)
+        # Junior: €50/3h, extra €10/h
+        # Senior: €56/3h, extra €12/h
+        if is_junior:
+            base_eur = 50.0
+            durata_base_h = 3.0
+            extra_eur_per_h = 10.0
+        else:  # Senior
+            base_eur = 56.0
+            durata_base_h = 3.0
+            extra_eur_per_h = 12.0
+        notturno_perc = 0.15  # +15%
+        festivo_perc = 0.20   # +20%
+        
+        durata_h = durata_min / 60.0
+        base = base_eur
+        
+        # SAND: no extra, SÌ notturno 23:00-03:30
+        to_upper = str(tour_operator).upper().strip() if tour_operator else ''
+        is_sand = 'SAND' in to_upper
+        
+        # Calcola extra
+        if is_sand:
+            extra = 0.0
+        else:
+            ore_extra_base = max(0, durata_h - durata_base_h)
+            extra = ore_extra_base * extra_eur_per_h
+            if extra_min > 0:
+                extra += (extra_min / 60.0) * extra_eur_per_h
+        
+        # Calcola notturno +15% (anche per SAND con fascia 23:00-03:30)
+        if minuti_notturni <= 0:
+            notte = 0.0
+        else:
+            valore_orario = base / durata_base_h if durata_base_h > 0 else 0.0
+            ore_notturne = minuti_notturni / 60.0
+            valore_parte_notturna = valore_orario * ore_notturne
+            notte = valore_parte_notturna * notturno_perc
+        
+        # Totale
+        subtotale = base + extra + notte
+        if is_festivo:
+            totale_lordo = subtotale * (1 + festivo_perc)
+        else:
+            totale_lordo = subtotale
+        
+        # Scorporo netto
+        regime = tariffa.regime if tariffa else None
+        def scorpora_netto(lordo: float, regime_val: Optional[str]) -> float:
+            if not regime_val:
+                return lordo * 0.80
+            regime_str = str(regime_val).strip().upper()
+            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str:
+                return lordo
+            elif 'RITENUTA' in regime_str or 'ACCONTO' in regime_str:
+                return lordo * 0.80
+            else:
+                return lordo * 0.80
+        
+        return {
+            'base_eur': round(scorpora_netto(base, regime), 2),
+            'extra_eur': round(scorpora_netto(extra, regime), 2),
+            'notte_eur': round(scorpora_netto(notte, regime), 2),
+            'totale_eur': round(scorpora_netto(totale_lordo, regime), 2)
+        }
+    
+    # 3c. NAP - Tariffe Incentive (Iantra) (Accordo Napoli 2026)
+    # Assistenza incentive: €60,00 + IVA per 2h30'
+    # Ore extra incentive: €15,00 + IVA all'ora
+    if apt_upper == 'NAP' and tipo_servizio and 'incentive' in str(tipo_servizio).lower():
+        base_eur = 60.0
+        durata_base_h = 2.5
+        extra_eur_per_h = 15.0
+        notturno_perc = 0.15  # +15% per NAP
+        festivo_perc = 0.20   # +20%
+        
+        durata_h = durata_min / 60.0
+        base = base_eur
+        
+        ore_extra_base = max(0, durata_h - durata_base_h)
+        extra = ore_extra_base * extra_eur_per_h
+        if extra_min > 0:
+            extra += (extra_min / 60.0) * extra_eur_per_h
+        
+        if minuti_notturni > 0:
+            valore_orario = base / durata_base_h
+            ore_notturne = minuti_notturni / 60.0
+            notte = valore_orario * ore_notturne * notturno_perc
+        else:
+            notte = 0.0
+        
+        subtotale = base + extra + notte
+        if is_festivo:
+            totale_lordo = subtotale * (1 + festivo_perc)
+        else:
+            totale_lordo = subtotale
+        
+        regime = tariffa.regime if tariffa else None
+        def scorpora_netto(lordo: float, regime_val: Optional[str]) -> float:
+            if not regime_val:
+                return lordo * 0.80
+            regime_str = str(regime_val).strip().upper()
+            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str:
+                return lordo
+            elif 'RITENUTA' in regime_str or 'ACCONTO' in regime_str:
+                return lordo * 0.80
+            else:
+                return lordo * 0.80
+        
+        return {
+            'base_eur': round(scorpora_netto(base, regime), 2),
+            'extra_eur': round(scorpora_netto(extra, regime), 2),
+            'notte_eur': round(scorpora_netto(notte, regime), 2),
+            'totale_eur': round(scorpora_netto(totale_lordo, regime), 2)
+        }
+    
+    # 4. NAP - Tariffe Transfer (Accordo NAP 2026)
     if apt_upper == 'NAP' and tipo_servizio and 'transfer' in str(tipo_servizio).lower():
-        # Tariffa Transfer: €50,00 forfettaria
-        # Eventuali prolungamenti generano ore extra (€12/h)
-        base_eur = 50.0
+        # Transfer: Junior €45 (Veratour), Senior €50 (Veratour)
+        # Classificazione Junior/Senior per nome
+        NAP_JUNIOR_NAMES = {
+            'CAMILLA MIGNOGNA', 'SARA MERENDA', 'RITA ORSO',
+            'MIGNOGNA CAMILLA', 'MERENDA SARA', 'ORSO RITA',
+        }
+        nome_upper = nome.upper().strip() if nome else ''
+        categoria = tariffa.categoria if tariffa else None
+        categoria_str = str(categoria).strip().upper() if categoria else ''
+        is_junior = nome_upper in NAP_JUNIOR_NAMES or 'JUNIOR' in categoria_str or 'YUNIOR' in categoria_str
+        
+        if is_junior:
+            base_eur = 45.0  # Junior transfer
+            extra_eur_per_h = 10.0
+        else:
+            base_eur = 50.0  # Senior transfer
+            extra_eur_per_h = 12.0
         durata_base_h = 0.0  # Forfettaria, non ha durata base fissa
-        extra_eur_per_h = 12.0
-        notturno_perc = 0.15  # +15% per NAP (REGOLE OPERATIVE 2026)
-        festivo_perc = 0.20  # +20% per festivi
+        notturno_perc = 0.15  # +15%
+        festivo_perc = 0.20  # +20%
         
         base = base_eur
         
@@ -837,15 +1161,27 @@ def calcola_tariffa_collaboratore(
             'totale_eur': round(scorpora_netto(totale_lordo, regime), 2)
         }
     
-    # 5. NAP - Tariffe Arrivi (REGOLE OPERATIVE 2026)
+    # 5. NAP - Tariffe Arrivi/Meet&Greet (Accordo NAP 2026)
     if apt_upper == 'NAP' and tipo_servizio and ('arrivi' in str(tipo_servizio).lower() or 'meet' in str(tipo_servizio).lower()):
-        # Tariffa Arrivi: €56,00 per 2h30'
-        # Eventuali prolungamenti generano ore extra secondo tariffa standard
-        base_eur = 56.0
+        # Arrivi/Meet&Greet: Junior €48, Senior €56
+        NAP_JUNIOR_NAMES = {
+            'CAMILLA MIGNOGNA', 'SARA MERENDA', 'RITA ORSO',
+            'MIGNOGNA CAMILLA', 'MERENDA SARA', 'ORSO RITA',
+        }
+        nome_upper = nome.upper().strip() if nome else ''
+        categoria = tariffa.categoria if tariffa else None
+        categoria_str = str(categoria).strip().upper() if categoria else ''
+        is_junior = nome_upper in NAP_JUNIOR_NAMES or 'JUNIOR' in categoria_str or 'YUNIOR' in categoria_str
+        
+        if is_junior:
+            base_eur = 48.0   # Junior meet&greet
+            extra_eur_per_h = 10.0
+        else:
+            base_eur = 56.0   # Senior meet&greet
+            extra_eur_per_h = 12.0
         durata_base_h = 2.5
-        extra_eur_per_h = 12.0
-        notturno_perc = 0.15  # +15% per NAP (REGOLE OPERATIVE 2026)
-        festivo_perc = 0.20  # +20% per festivi
+        notturno_perc = 0.15  # +15%
+        festivo_perc = 0.20   # +20%
         
         durata_h = durata_min / 60.0
         base = base_eur
@@ -893,21 +1229,227 @@ def calcola_tariffa_collaboratore(
             'totale_eur': round(scorpora_netto(totale_lordo, regime), 2)
         }
     
-    # REGOLE STANDARD (con modifiche per NAP notturno +15%)
+    # 6. MXP - Manuela Gregori (Accordo 2026)
+    # Regole speciali: base fisso €60, extra SOLO su ritardi (extra_min), notturno +20%, INPS +4%
+    nome_norm = tm._normalize_name(nome) if tariffa else nome.lower().strip()
+    if apt_upper == 'MXP' and ('manuela' in nome_norm.lower() and 'gregori' in nome_norm.lower()):
+        # BASE: sempre €60
+        base = 60.0
+        # EXTRA: SOLO da extra_min (ritardi ATD-STD), NON dalla durata
+        extra = (extra_min / 60.0) * 12.0 if extra_min > 0 else 0.0
+        # NOTTURNO: +20% (fascia 23:00-06:00)
+        if minuti_notturni > 0:
+            notte = (minuti_notturni / 60.0) * 20.0 * 0.20
+        else:
+            notte = 0.0
+        # SUBTOTALE
+        subtotale = base + extra + notte
+        if is_festivo:
+            subtotale *= 1.20
+        # INPS +4%
+        inps_eur = subtotale * 0.04
+        totale = subtotale + inps_eur
+        # P.IVA → nessuno scorporo
+        return {
+            'base_eur': round(base, 2),
+            'extra_eur': round(extra, 2),
+            'notte_eur': round(notte, 2),
+            'inps_eur': round(inps_eur, 2),
+            'totale_eur': round(totale, 2)
+        }
+    
+    # 6b. CTA / TRN / PMO / PSA - Tariffe Catania, Torino, Palermo, Pisa (stesse regole)
+    # Base: €60/3h, Extra: €12/h, Notturno: +15% (23:00-06:00), Festivo: +20%
+    if apt_upper in ('CTA', 'TRN', 'PMO', 'PSA') and (tipo_servizio is None or tipo_servizio == '' or tipo_servizio == 'standard'):
+        base_eur = 60.0
+        durata_base_h = 3.0
+        extra_eur_per_h = 12.0
+        notturno_perc = 0.15  # +15%
+        festivo_perc = 0.20   # +20%
+        
+        durata_h = durata_min / 60.0
+        base = base_eur
+        
+        # Calcola extra
+        ore_extra_base = max(0, durata_h - durata_base_h)
+        extra = ore_extra_base * extra_eur_per_h
+        if extra_min > 0:
+            extra += (extra_min / 60.0) * extra_eur_per_h
+        
+        # Calcola notturno +15% (fascia 23:00-06:00)
+        if minuti_notturni > 0:
+            valore_orario = base / durata_base_h
+            ore_notturne = minuti_notturni / 60.0
+            notte = valore_orario * ore_notturne * notturno_perc
+        else:
+            notte = 0.0
+        
+        # Totale con festivo
+        subtotale = base + extra + notte
+        if is_festivo:
+            totale_lordo = subtotale * (1 + festivo_perc)
+        else:
+            totale_lordo = subtotale
+        
+        # Scorporo netto
+        regime = tariffa.regime if tariffa else None
+        def scorpora_netto(lordo: float, regime_val: Optional[str]) -> float:
+            if not regime_val:
+                return lordo * 0.80
+            regime_str = str(regime_val).strip().upper()
+            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str:
+                return lordo
+            elif 'RITENUTA' in regime_str or 'ACCONTO' in regime_str:
+                return lordo * 0.80
+            else:
+                return lordo * 0.80
+        
+        return {
+            'base_eur': round(scorpora_netto(base, regime), 2),
+            'extra_eur': round(scorpora_netto(extra, regime), 2),
+            'notte_eur': round(scorpora_netto(notte, regime), 2),
+            'totale_eur': round(scorpora_netto(totale_lordo, regime), 2)
+        }
+    
+    # 6c. BRI / BLQ - Tariffe Bari, Bologna
+    # Base: €53/3h, Extra: €12/h, Notturno: +15% (23:00-06:00), Festivo: +20%
+    if apt_upper in ('BRI', 'BLQ') and (tipo_servizio is None or tipo_servizio == '' or tipo_servizio == 'standard'):
+        base_eur = 53.0
+        durata_base_h = 3.0
+        extra_eur_per_h = 12.0
+        notturno_perc = 0.15
+        festivo_perc = 0.20
+        
+        durata_h = durata_min / 60.0
+        base = base_eur
+        
+        ore_extra_base = max(0, durata_h - durata_base_h)
+        extra = ore_extra_base * extra_eur_per_h
+        if extra_min > 0:
+            extra += (extra_min / 60.0) * extra_eur_per_h
+        
+        if minuti_notturni > 0:
+            valore_orario = base / durata_base_h
+            ore_notturne = minuti_notturni / 60.0
+            notte = valore_orario * ore_notturne * notturno_perc
+        else:
+            notte = 0.0
+        
+        subtotale = base + extra + notte
+        if is_festivo:
+            totale_lordo = subtotale * (1 + festivo_perc)
+        else:
+            totale_lordo = subtotale
+        
+        regime = tariffa.regime if tariffa else None
+        def scorpora_netto(lordo: float, regime_val: Optional[str]) -> float:
+            if not regime_val:
+                return lordo * 0.80
+            regime_str = str(regime_val).strip().upper()
+            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str:
+                return lordo
+            elif 'RITENUTA' in regime_str or 'ACCONTO' in regime_str:
+                return lordo * 0.80
+            else:
+                return lordo * 0.80
+        
+        return {
+            'base_eur': round(scorpora_netto(base, regime), 2),
+            'extra_eur': round(scorpora_netto(extra, regime), 2),
+            'notte_eur': round(scorpora_netto(notte, regime), 2),
+            'totale_eur': round(scorpora_netto(totale_lordo, regime), 2)
+        }
+    
+    # 7. FCO - Tariffe Standard Partenze (Accordo Assistenti FCO 2026)
+    # Assistenza base: €56,00 + IVA per 2h30'
+    # Ore extra: €12,00 + IVA all'ora
+    # Notturno: +20% con fascia TO-specifica:
+    #   - SAND: 23:00-03:30
+    #   - Baobab/TH/Domina/Rusconi/Micheltours: 23:00-06:00
+    # Festivo: +20% (include 29/6 Santi Pietro e Paolo)
+    if apt_upper == 'FCO' and (tipo_servizio is None or tipo_servizio == '' or tipo_servizio == 'standard'):
+        base_eur = 56.0
+        durata_base_h = 2.5
+        extra_eur_per_h = 12.0
+        notturno_perc = 0.20  # +20% per FCO (Accordo 2026)
+        festivo_perc = 0.20  # +20% per festivi
+        
+        durata_h = durata_min / 60.0
+        base = base_eur
+        
+        # Calcola extra
+        ore_extra_base = max(0, durata_h - durata_base_h)
+        extra_ore_oltre_base = ore_extra_base * extra_eur_per_h
+        if extra_min > 0:
+            extra_minuti_ritardo = (extra_min / 60.0) * extra_eur_per_h
+        else:
+            extra_minuti_ritardo = 0.0
+        extra = extra_ore_oltre_base + extra_minuti_ritardo
+        
+        # Calcola notturno +20%
+        if minuti_notturni > 0:
+            valore_orario = base / durata_base_h if durata_base_h > 0 else 0.0
+            ore_notturne = minuti_notturni / 60.0
+            valore_parte_notturna = valore_orario * ore_notturne
+            notte = valore_parte_notturna * notturno_perc
+        else:
+            notte = 0.0
+        
+        # Verifica festivo con festività FCO (include 29/6)
+        is_festivo_fco = is_festivo
+        # Il flag is_festivo potrebbe non includere 29/6, quindi verifichiamo
+        # La verifica 29/6 è gestita dal chiamante che usa get_fco_holidays()
+        
+        subtotale = base + extra + notte
+        if is_festivo_fco:
+            totale_lordo = subtotale * (1 + festivo_perc)
+        else:
+            totale_lordo = subtotale
+        
+        # FCO: tariffe sono + IVA
+        regime = tariffa.regime if tariffa else None
+        def scorpora_netto(lordo: float, regime_val: Optional[str]) -> float:
+            if not regime_val:
+                return lordo
+            regime_str = str(regime_val).strip().upper()
+            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str:
+                return lordo
+            elif 'RITENUTA' in regime_str or 'ACCONTO' in regime_str:
+                return lordo * 0.80
+            else:
+                return lordo
+        
+        return {
+            'base_eur': round(scorpora_netto(base, regime), 2),
+            'extra_eur': round(scorpora_netto(extra, regime), 2),
+            'notte_eur': round(scorpora_netto(notte, regime), 2),
+            'totale_eur': round(scorpora_netto(totale_lordo, regime), 2)
+        }
+    
+    # REGOLE STANDARD (con modifiche per NAP notturno +15%, FCO notturno +20%)
     if tariffa is None:
         # Usa tariffe default per aeroporto (se disponibili) o tariffe generiche
         base_eur = 58.0  # Default
         durata_base_h = 3.0  # Default
         extra_eur_per_h = 12.0  # Default
-        # NAP: notturno +15% invece di +20% (REGOLE OPERATIVE 2026)
-        notturno_perc = 0.15 if apt_upper == 'NAP' else 0.15  # Default +15%
+        # FCO: notturno +20% (Accordo Assistenti FCO 2026)
+        # NAP: notturno +15% (REGOLE OPERATIVE 2026)
+        if apt_upper == 'FCO':
+            notturno_perc = 0.20  # +20% per FCO
+        elif apt_upper == 'NAP':
+            notturno_perc = 0.15  # +15% per NAP
+        else:
+            notturno_perc = 0.15  # Default +15%
         festivo_perc = 0.20  # Default +20%
     else:
         base_eur = tariffa.base_eur or 58.0
         durata_base_h = tariffa.durata_base_h or 3.0
         extra_eur_per_h = tariffa.extra_eur_per_h or 12.0
-        # NAP: notturno +15% invece di +20% (REGOLE OPERATIVE 2026)
-        if apt_upper == 'NAP':
+        # FCO: notturno +20% (Accordo Assistenti FCO 2026)
+        # NAP: notturno +15% (REGOLE OPERATIVE 2026)
+        if apt_upper == 'FCO':
+            notturno_perc = 0.20  # Forza +20% per FCO
+        elif apt_upper == 'NAP':
             notturno_perc = 0.15  # Forza +15% per NAP
         else:
             notturno_perc = tariffa.notturno_perc or 0.15
@@ -950,9 +1492,19 @@ def calcola_tariffa_collaboratore(
     # Calcola totale lordo
     subtotale = base + extra + notte
     if is_festivo:
-        totale_lordo = subtotale * (1 + festivo_perc)
-    else:
-        totale_lordo = subtotale
+        subtotale = subtotale * (1 + festivo_perc)
+    
+    # Applica INPS (es. +4% per Partita IVA, come da Accordo 2026)
+    inps_perc = 0.0
+    if tariffa and tariffa.inps_perc is not None:
+        inps_perc = tariffa.inps_perc
+    elif tariffa and tariffa.regime:
+        regime_str = str(tariffa.regime).strip().upper()
+        if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str:
+            inps_perc = 0.04  # Default INPS 4% per P.IVA (Accordo 2026)
+    
+    inps_eur = subtotale * inps_perc
+    totale_lordo = subtotale + inps_eur
     
     # Applica scorporo in base al regime per ottenere il netto
     # Le tariffe nel file Excel sono sempre al lordo
@@ -994,6 +1546,7 @@ def calcola_tariffa_collaboratore(
         'base_eur': round(base_netto, 2),
         'extra_eur': round(extra_netto, 2),
         'notte_eur': round(notte_netto, 2),
+        'inps_eur': round(scorpora_netto(inps_eur, regime), 2),
         'totale_eur': round(totale_netto, 2)
     }
 

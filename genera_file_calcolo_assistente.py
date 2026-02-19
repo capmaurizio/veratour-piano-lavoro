@@ -102,14 +102,20 @@ def calcola_tariffa_turno(
         durata_base_h = 3.0
         extra_eur_per_h = base_eur / durata_base_h  # Proporzionale
         notturno_perc = 0.20
-    # FCO - Tariffe Incentive
+    # FCO - Tariffe Incentive (Accordo Assistenti FCO 2026)
     elif apt_upper == 'FCO' and tipo_servizio == 'incentive':
         base_eur = 60.0
         durata_base_h = 2.5
         extra_eur_per_h = 15.0
         notturno_perc = 0.20
-    # FCO - Tariffe Arrivi (Meet & Greet)
+    # FCO - Tariffe Arrivi (Meet & Greet) (Accordo Assistenti FCO 2026)
     elif apt_upper == 'FCO' and tipo_servizio == 'arrivi':
+        base_eur = 56.0
+        durata_base_h = 2.5
+        extra_eur_per_h = 12.0
+        notturno_perc = 0.20
+    # FCO - Tariffe Standard Partenze (Accordo Assistenti FCO 2026)
+    elif apt_upper == 'FCO' and (tipo_servizio is None or tipo_servizio == 'standard'):
         base_eur = 56.0
         durata_base_h = 2.5
         extra_eur_per_h = 12.0
@@ -126,7 +132,7 @@ def calcola_tariffa_turno(
         durata_base_h = 2.5
         extra_eur_per_h = 12.0
         notturno_perc = 0.15
-    # REGOLE STANDARD
+    # REGOLE STANDARD per altri aeroporti
     else:
         # Valori di default - MODIFICARE secondo tariffe specifiche
         base_eur = 58.0

@@ -72,9 +72,14 @@ def calcola_tariffa_turno(
         durata_base_h = 2.5
         extra_eur_per_h = 12.0
         notturno_perc = 0.15
-    # REGOLE STANDARD
+    # FCO - Tariffe Standard Partenze (Accordo Assistenti FCO 2026)
+    elif apt_upper == 'FCO' and (tipo_servizio is None or tipo_servizio == 'standard'):
+        base_eur = 56.0
+        durata_base_h = 2.5
+        extra_eur_per_h = 12.0
+        notturno_perc = 0.20
+    # REGOLE STANDARD per altri aeroporti
     else:
-        # Valori di default - MODIFICARE secondo tariffe specifiche
         base_eur = 58.0
         durata_base_h = 3.0
         extra_eur_per_h = 12.0

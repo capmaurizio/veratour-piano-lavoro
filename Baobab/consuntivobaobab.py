@@ -705,11 +705,14 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
         # Verifica se è Wizzair a FCO
         # Wizzair si riconosce dai caratteri "W4" nel codice volo (es. W46179, W4 6117)
         is_wizzair_fco = False
-        if b.apt.upper() == "FCO" and b.compagnia:
-            compagnia_str = str(b.compagnia).upper()
-            # Cerca "W4" nel codice volo
-            if "W4" in compagnia_str or compagnia_str.startswith("W4"):
-                is_wizzair_fco = True
+        if b.apt.upper() == "FCO":
+            # Cerca "W4" prima nel campo VOLO, poi in COMPAGNIA
+            for field_val in [b.volo, b.compagnia]:
+                if field_val:
+                    field_str = str(field_val).upper()
+                    if "W4" in field_str or field_str.startswith("W4"):
+                        is_wizzair_fco = True
+                        break
         
         if std_sel is None:
             # Se non c'è STD, usa il TURNO come fallback (ma segnala)
