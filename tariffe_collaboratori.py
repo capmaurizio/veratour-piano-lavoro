@@ -621,7 +621,7 @@ def calcola_tariffa_collaboratore(
                 if not regime_val:
                     return lordo * 0.80
                 regime_str = str(regime_val).strip().upper()
-                if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str:
+                if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str or 'CHIAMATA' in regime_str:
                     return lordo
                 elif 'RITENUTA' in regime_str or 'ACCONTO' in regime_str:
                     return lordo * 0.80
@@ -668,7 +668,7 @@ def calcola_tariffa_collaboratore(
                 if not regime_val:
                     return lordo * 0.80
                 regime_str = str(regime_val).strip().upper()
-                if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str:
+                if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str or 'CHIAMATA' in regime_str:
                     return lordo
                 elif 'RITENUTA' in regime_str or 'ACCONTO' in regime_str:
                     return lordo * 0.80
@@ -805,7 +805,7 @@ def calcola_tariffa_collaboratore(
             if not regime_val:
                 return lordo * 0.80
             regime_str = str(regime_val).strip().upper()
-            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str:
+            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str or 'CHIAMATA' in regime_str:
                 return lordo
             elif 'RITENUTA' in regime_str or 'ACCONTO' in regime_str:
                 return lordo * 0.80
@@ -862,7 +862,7 @@ def calcola_tariffa_collaboratore(
             if not regime_val:
                 return lordo
             regime_str = str(regime_val).strip().upper()
-            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str:
+            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str or 'CHIAMATA' in regime_str:
                 # FCO P.IVA: tariffe sono + IVA, quindi già al netto per il collaboratore
                 return lordo
             elif 'RITENUTA' in regime_str or 'ACCONTO' in regime_str:
@@ -920,7 +920,7 @@ def calcola_tariffa_collaboratore(
             if not regime_val:
                 return lordo
             regime_str = str(regime_val).strip().upper()
-            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str:
+            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str or 'CHIAMATA' in regime_str:
                 return lordo
             elif 'RITENUTA' in regime_str or 'ACCONTO' in regime_str:
                 return lordo * 0.80
@@ -1027,7 +1027,7 @@ def calcola_tariffa_collaboratore(
             if not regime_val:
                 return lordo * 0.80
             regime_str = str(regime_val).strip().upper()
-            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str:
+            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str or 'CHIAMATA' in regime_str:
                 return lordo
             elif 'RITENUTA' in regime_str or 'ACCONTO' in regime_str:
                 return lordo * 0.80
@@ -1077,7 +1077,7 @@ def calcola_tariffa_collaboratore(
             if not regime_val:
                 return lordo * 0.80
             regime_str = str(regime_val).strip().upper()
-            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str:
+            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str or 'CHIAMATA' in regime_str:
                 return lordo
             elif 'RITENUTA' in regime_str or 'ACCONTO' in regime_str:
                 return lordo * 0.80
@@ -1147,7 +1147,7 @@ def calcola_tariffa_collaboratore(
             if not regime_val:
                 return lordo * 0.80
             regime_str = str(regime_val).strip().upper()
-            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str:
+            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str or 'CHIAMATA' in regime_str:
                 return lordo
             elif 'RITENUTA' in regime_str or 'ACCONTO' in regime_str:
                 return lordo * 0.80
@@ -1215,7 +1215,7 @@ def calcola_tariffa_collaboratore(
             if not regime_val:
                 return lordo * 0.80
             regime_str = str(regime_val).strip().upper()
-            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str:
+            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str or 'CHIAMATA' in regime_str:
                 return lordo
             elif 'RITENUTA' in regime_str or 'ACCONTO' in regime_str:
                 return lordo * 0.80
@@ -1297,7 +1297,7 @@ def calcola_tariffa_collaboratore(
             if not regime_val:
                 return lordo * 0.80
             regime_str = str(regime_val).strip().upper()
-            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str:
+            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str or 'CHIAMATA' in regime_str:
                 return lordo
             elif 'RITENUTA' in regime_str or 'ACCONTO' in regime_str:
                 return lordo * 0.80
@@ -1346,7 +1346,7 @@ def calcola_tariffa_collaboratore(
             if not regime_val:
                 return lordo * 0.80
             regime_str = str(regime_val).strip().upper()
-            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str:
+            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str or 'CHIAMATA' in regime_str:
                 return lordo
             elif 'RITENUTA' in regime_str or 'ACCONTO' in regime_str:
                 return lordo * 0.80
@@ -1412,7 +1412,7 @@ def calcola_tariffa_collaboratore(
             if not regime_val:
                 return lordo
             regime_str = str(regime_val).strip().upper()
-            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str:
+            if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str or 'CHIAMATA' in regime_str:
                 return lordo
             elif 'RITENUTA' in regime_str or 'ACCONTO' in regime_str:
                 return lordo * 0.80
@@ -1525,7 +1525,7 @@ def calcola_tariffa_collaboratore(
         
         regime_str = str(regime_val).strip().upper()
         
-        if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str:
+        if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str or 'CHIAMATA' in regime_str:
             # Partita IVA: le tariffe nel file Excel sono già al NETTO
             # Non serve scorporo IVA, restituisci il valore così com'è
             return lordo
