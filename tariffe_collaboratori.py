@@ -1997,7 +1997,7 @@ def create_collaboratori_sheet(
                             aeroporto=apt,
                             nome=tariffa_default.nome,  # Usa il nome della tariffa di default
                             durata_min=durata_blocco,
-                            extra_min=extra_blocco,
+                            extra_min=0,  # extra_blocco contiene già i minuti oltre la base
                             minuti_notturni=notte_blocco,
                             is_festivo=is_fest_blocco,
                             tour_operator=tour_op if tour_op else None,
