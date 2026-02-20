@@ -1661,19 +1661,11 @@ def create_collaboratori_sheet(
         if volo_val == 'nan' or volo_val == '':
             volo_val = ''
         
-        # Calcola minuti totali extra (ore oltre base + ritardi ATD)
-        # Le ore oltre la base vengono calcolate come extra
-        durata_h = durata_min / 60.0
+        # EXTRA_MIN dal blocco contiene già i minuti oltre la base calcolati dal consuntivo
+        # Non ricalcolare per evitare doppio conteggio
         tm = get_tariffe_manager()
         tariffa = tm.get_tariffa(apt, assistente, tour_operator)
-        # Gestisci il caso in cui tariffa è None o durata_base_h è None
-        if tariffa and tariffa.durata_base_h is not None:
-            durata_base_h = float(tariffa.durata_base_h)
-        else:
-            durata_base_h = 3.0  # Default: 3 ore
-        minuti_oltre_base = max(0, int((durata_h - durata_base_h) * 60))
-        # Minuti totali extra = minuti oltre base + minuti ritardi ATD
-        extra_min_totali = minuti_oltre_base + int(extra_min)
+        extra_min_totali = int(extra_min)
         
         rows_collaboratori.append({
             'DATA': data_str,
