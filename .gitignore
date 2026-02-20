@@ -16,6 +16,8 @@ TEST_*.xlsx
 *_TEMP.xlsx
 *.xlsx
 *.xls
+# Eccezione: file tariffe necessario per Streamlit Cloud
+!TARIFFE COLLABORATORI 2026 DEF.xlsx
 *.docx
 *.pdf
 
