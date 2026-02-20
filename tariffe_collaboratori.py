@@ -1642,11 +1642,14 @@ def create_collaboratori_sheet(
                 tipo_servizio = 'transfer'
         
         # Calcola tariffe usando il modulo
+        # NOTA: extra_min=0 perché EXTRA_MIN dal blocco contiene già i minuti oltre la base,
+        # e calcola_tariffa_collaboratore li ricalcola internamente da durata_min.
+        # Passare extra_min causerebbe doppio conteggio.
         tariffe = calcola_tariffa_collaboratore(
             aeroporto=apt,
             nome=assistente,
             durata_min=durata_min,
-            extra_min=extra_min,
+            extra_min=0,
             minuti_notturni=minuti_notturni,
             is_festivo=is_fest,
             tour_operator=tour_operator,
