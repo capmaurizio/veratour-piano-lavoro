@@ -623,9 +623,27 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                         if match:
                             cvc_minuti = int(match.group(1))
 
-                # Se turno_norm è vuoto, usa un placeholder per la chiave
+                # Se turno_norm è vuoto, costruisci un turno sintetico da CVC/STD
+                # Per Baobab START=STD-2h30, END=ATD, quindi il TURNO non è critico
                 if not turno_norm:
-                    turno_norm = f"ERRORE_{idx}"
+                    cvc_parsed_t = None
+                    std_parsed_t = None
+                    if cols.get("convocazione") and cols["convocazione"] in r.index:
+                        cvc_parsed_t = parse_time_value(r[cols["convocazione"]])
+                    if std_times:
+                        std_parsed_t = std_times[0]
+                    elif cols.get("std") and cols["std"] in r.index:
+                        std_parsed_t = parse_time_value(r[cols["std"]])
+                    if cvc_parsed_t and std_parsed_t:
+                        turno_norm = f"{cvc_parsed_t[0]:02d}:{cvc_parsed_t[1]:02d}-{std_parsed_t[0]:02d}:{std_parsed_t[1]:02d}"
+                        turno_ffill_raw = turno_norm
+                    elif std_parsed_t:
+                        sh = (std_parsed_t[0] * 60 + std_parsed_t[1] - 150) % 1440
+                        s_h, s_m = sh // 60, sh % 60
+                        turno_norm = f"{s_h:02d}:{s_m:02d}-{std_parsed_t[0]:02d}:{std_parsed_t[1]:02d}"
+                        turno_ffill_raw = turno_norm
+                    else:
+                        turno_norm = f"ERRORE_{idx}"
 
                 # BAOBAB: ogni riga del Piano Lavoro genera un blocco separato
                 # Usa un identificatore univoco per riga (indice globale) per evitare aggregazioni
@@ -648,10 +666,13 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                         std_times.append(parsed)
 
                 # Anchor ATDs to date; if ATD < start_dt => +1 day
+                # Se il TURNO originale era nan, non usare __start_dt (viene dal forward-fill errato)
                 atd_dt_list: List[pd.Timestamp] = []
+                turno_originale_vuoto = pd.isna(r[cols["turno"]]) or str(r[cols["turno"]]).strip() in ("", "nan", "None")
+                ref_start = pd.NaT if turno_originale_vuoto else r["__start_dt"]
                 for hh, mm in atd_times:
                     tdt = d + pd.Timedelta(hours=hh, minutes=mm)
-                    if tdt < r["__start_dt"]:
+                    if pd.notna(ref_start) and tdt < ref_start:
                         tdt = tdt + pd.Timedelta(days=1)
                     atd_dt_list.append(tdt)
 
@@ -659,7 +680,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                 std_dt_list: List[pd.Timestamp] = []
                 for hh, mm in std_times:
                     tdt = d + pd.Timedelta(hours=hh, minutes=mm)
-                    if tdt < r["__start_dt"]:
+                    if pd.notna(ref_start) and tdt < ref_start:
                         tdt = tdt + pd.Timedelta(days=1)
                     std_dt_list.append(tdt)
 
