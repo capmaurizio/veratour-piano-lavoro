@@ -20,7 +20,11 @@ La tariffa è per singola assistenza / per volo e include la base di 2h30.
 
 Tutti gli scali nazionali → € 100,00
 
-Roma Fiumicino (FCO) e Venezia (VCE) → € 110,00
+Bergamo (BGY) → € 110,00
+
+Roma Fiumicino (FCO) → € 115,00
+
+Venezia (VCE) → € 140,00
 
 👉 Non esistono scaglioni orari sulla base: è una quota fissa per volo.
 
@@ -138,6 +142,6 @@ Totale = (Base_€ + Extra_€ + Notturno_€ + Carte_€) × 1,30
 
 In una frase (versione “da controllo”)
 
-Rusconi paga una quota fissa per volo (100€ / 110€), convoca 2h30 prima dello STD, riconosce solo il ritardo reale come extra a 20€/h, applica notturno +20% e festivo +30%, e fattura le carte imbarco a pezzo.
+Rusconi paga una quota fissa per volo (100€ / BGY 110€ / FCO 115€ / VCE 140€), convoca 2h30 prima dello STD, riconosce solo il ritardo reale come extra a 20€/h, applica notturno +20% e festivo +30%, e fattura le carte imbarco a pezzo.
 
  

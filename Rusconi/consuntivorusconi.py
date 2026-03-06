@@ -85,11 +85,11 @@ class RoundingPolicy:
 
 
 # Tariffe base Rusconi per 2h30 (150 min)
-# Tutti gli scali nazionali: €100,00
-# FCO e VCE: €110,00
+# BGY: €110,00 | FCO: €115,00 | VCE: €140,00 | Tutti gli altri: €100,00
 TARIFFE_BASE_RUSCONI = {
-    "FCO": 110.0,  # Roma Fiumicino
-    "VCE": 110.0,  # Venezia
+    "BGY": 110.0,  # Bergamo
+    "FCO": 115.0,  # Roma Fiumicino
+    "VCE": 140.0,  # Venezia
     # Tutti gli altri: €100,00 (default)
 }
 
@@ -296,7 +296,7 @@ def night_minutes(start_dt: pd.Timestamp, end_dt: pd.Timestamp) -> int:
 
 
 def compute_turno_eur(apt: str) -> float:
-    """Calcola importo turno base (sempre 2h30 = 150 min) - €100,00 o €110,00"""
+    """Calcola importo turno base (sempre 2h30 = 150 min) - BGY €110, FCO €115, VCE €140, altri €100"""
     apt_upper = apt.upper().strip()
     return TARIFFE_BASE_RUSCONI.get(apt_upper, 100.0)  # Default: €100,00
 
@@ -622,7 +622,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
 
     for key, b in sorted(blocks.items(), key=lambda kv: (kv[1].date, kv[1].apt, kv[1].first_source.original_order)):
         # RUSCONI: START = STD - 2:30
-        # Base: quota fissa €100 o €110 (per volo, include 2h30)
+        # Base: quota fissa per aeroporto (BGY €110, FCO €115, VCE €140, altri €100)
         # Extra: solo sul ritardo (ATD - STD), non sulla durata totale
         # Notturno: 20% su (Base + Extra), calcolato proporzionalmente ai minuti nella fascia 22:00-06:00
         # Carte di imbarco: servizio accessorio
@@ -658,7 +658,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
             # START = STD - 2:30
             start_rusconi = std_sel - pd.Timedelta(hours=2, minutes=30)
             
-            # Base: quota fissa per volo (€100 o €110)
+            # Base: quota fissa per volo per aeroporto
             turno_eur = compute_turno_eur(b.apt)
             
             # Extra: solo sul ritardo (ATD - STD), non sulla durata totale
