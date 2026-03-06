@@ -540,9 +540,29 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                     if to_val and to_val.lower() not in ["nan", "none", ""]:
                         tour_operator_orig = to_val
                 
-                # Se turno_norm è vuoto, usa un placeholder per la chiave
+                # Se turno_norm è vuoto, costruisci un turno sintetico da CVC/STD
+                # Per SAND il TURNO non è usato nel calcolo (START=STD-2h30, END=STD)
                 if not turno_norm:
-                    turno_norm = f"ERRORE_{idx}"
+                    cvc_parsed = None
+                    std_parsed = None
+                    if cols.get("convocazione") and cols["convocazione"] in r.index:
+                        cvc_parsed = parse_time_value(r[cols["convocazione"]])
+                    if cols.get("std") and cols["std"] in r.index:
+                        std_parsed = parse_time_value(r[cols["std"]])
+                    if cvc_parsed and std_parsed:
+                        turno_norm = f"{cvc_parsed[0]:02d}:{cvc_parsed[1]:02d}-{std_parsed[0]:02d}:{std_parsed[1]:02d}"
+                        turno_ffill_raw = turno_norm
+                        r_start_str = f"{cvc_parsed[0]:02d}:{cvc_parsed[1]:02d}"
+                        r_end_str = f"{std_parsed[0]:02d}:{std_parsed[1]:02d}"
+                    elif std_parsed:
+                        sh = (std_parsed[0] * 60 + std_parsed[1] - 150) % 1440
+                        s_h, s_m = sh // 60, sh % 60
+                        turno_norm = f"{s_h:02d}:{s_m:02d}-{std_parsed[0]:02d}:{std_parsed[1]:02d}"
+                        turno_ffill_raw = turno_norm
+                        r_start_str = f"{s_h:02d}:{s_m:02d}"
+                        r_end_str = f"{std_parsed[0]:02d}:{std_parsed[1]:02d}"
+                    else:
+                        turno_norm = f"ERRORE_{idx}"
 
                 # SAND: ogni riga del Piano Lavoro genera un blocco separato
                 # Usa un identificatore univoco per riga (indice globale) per evitare aggregazioni
@@ -566,9 +586,10 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
 
                 # Anchor ATDs to date; if ATD < start_dt => +1 day
                 atd_dt_list: List[pd.Timestamp] = []
+                ref_start = r["__start_dt"]
                 for hh, mm in atd_times:
                     tdt = d + pd.Timedelta(hours=hh, minutes=mm)
-                    if tdt < r["__start_dt"]:
+                    if pd.notna(ref_start) and tdt < ref_start:
                         tdt = tdt + pd.Timedelta(days=1)
                     atd_dt_list.append(tdt)
 
@@ -576,7 +597,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                 std_dt_list: List[pd.Timestamp] = []
                 for hh, mm in std_times:
                     tdt = d + pd.Timedelta(hours=hh, minutes=mm)
-                    if tdt < r["__start_dt"]:
+                    if pd.notna(ref_start) and tdt < ref_start:
                         tdt = tdt + pd.Timedelta(days=1)
                     std_dt_list.append(tdt)
 
