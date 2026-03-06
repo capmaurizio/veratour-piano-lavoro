@@ -391,6 +391,7 @@ def detect_columns(df: pd.DataFrame) -> Dict[str, Optional[str]]:
         "data": find_col(df, [r"^DATA$", r"\bDATE\b"]),
         "tour_operator": find_col(df, [r"TOUR\s*OPERATOR", r"^TO$", r"\bOPERATORE\b"]),
         "volo": find_col(df, [r"^volo$", r"numero\s*volo", r"n\.?\s*volo", r"flight"]),
+        "destinazione": find_col(df, [r"^DEST\.?NE$", r"^DEST$", r"DESTINAZIONE", r"DESTINATION"]),
         "compagnia": find_col(df, [r"^COMPAGNIA$", r"^AIRLINE$", r"\bCOMPAGNIA\s*AEREA\b", r"\bAIRLINE\b"]),  # Per rilevare compagnia aerea
         "apt": find_col(df, [r"^APT$", r"\bAEROPORTO\b", r"\bSCALO\b"]),
         "turno": find_col(df, [r"^TURNO$", r"^TURNO\s*ASSISTENTE$", r"\bTURNI\b"]),
@@ -435,6 +436,7 @@ class BlockAgg:
     tour_operator_originale: Optional[str] = None  # TOUR OPERATOR originale dalla riga
     compagnia: Optional[str] = None  # Compagnia aerea (per rilevare Wizzair)
     volo: Optional[str] = None  # Numero di volo
+    destinazione: Optional[str] = None
     cvc_minuti_extra: int = 0  # Minuti extra da CVC (es. CVC30 = 30 min, CVC60 = 60 min)
     errore: Optional[str] = None  # Messaggio di errore se i dati non sono validi
 
@@ -577,6 +579,14 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                     if volo_raw and volo_raw.lower() not in ["nan", "none", ""]:
                         volo_val = volo_raw
                 
+                # Extract destinazione from row
+                dest_val = None
+                dest_col = cols.get("destinazione")
+                if dest_col and dest_col in r.index:
+                    dest_val = str(r[dest_col]).strip() if pd.notna(r[dest_col]) else None
+                    if dest_val == "" or dest_val == "nan":
+                        dest_val = None
+                
                 # Estrai COMPAGNIA (per rilevare Wizzair)
                 compagnia_val = None
                 if cols["compagnia"] and cols["compagnia"] in r.index:
@@ -711,6 +721,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                         tour_operator_originale=tour_operator_orig,
                         compagnia=compagnia_val if compagnia_val else None,
                         volo=volo_val if volo_val else None,
+                        destinazione=dest_val if dest_val else None,
                         cvc_minuti_extra=cvc_minuti,
                     )
 
@@ -826,6 +837,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
             "COMPAGNIA": b.compagnia if b.compagnia else "",
             "ASSISTENTE": b.assistente if b.assistente else "",
             "VOLO": b.volo if b.volo else "",
+            "DEST.NE": b.destinazione if b.destinazione else "",
             "TURNO_FFILL": b.turno_raw_ffill,
             "TURNO_NORMALIZZATO": turno_normalizzato,
             "INIZIO_DT": start_baobab if not pd.isna(start_baobab) else b.start_dt,
@@ -972,6 +984,8 @@ def create_apt_detail_sheet(df_apt: pd.DataFrame) -> pd.DataFrame:
         'Data': df_apt['DATA'],
         'Tour Operator': df_apt['TOUR OPERATOR'].fillna('') if 'TOUR OPERATOR' in df_apt.columns else pd.Series([''] * len(df_apt)),
         'Turno': df_apt['TURNO_NORMALIZZATO'],
+        'Volo': df_apt['VOLO'].fillna('') if 'VOLO' in df_apt.columns else pd.Series([''] * len(df_apt)),
+        'Dest.ne': df_apt['DEST.NE'].fillna('') if 'DEST.NE' in df_apt.columns else pd.Series([''] * len(df_apt)),
         'Durata': df_apt['DURATA_H:MM'],
         'Turno (€)': df_apt['TURNO_EUR'].round(2),
         'Extra (h:mm)': df_apt['EXTRA_H:MM'],
@@ -1003,6 +1017,8 @@ def create_apt_detail_sheet(df_apt: pd.DataFrame) -> pd.DataFrame:
         'Data': 'TOTALE',
         'Tour Operator': '',
         'Turno': '',
+        'Volo': '',
+        'Dest.ne': '',
         'Durata': '',
         'Turno (€)': df_apt['TURNO_EUR'].sum(),
         'Extra (h:mm)': format_minutes_to_hmm(df_apt['EXTRA_MIN'].sum()),
@@ -1131,7 +1147,7 @@ def write_output_excel(output_path: str, detail_df: pd.DataFrame, totals_df: pd.
         # Order columns for readability
         if not detail_df.empty:
             cols = [
-                "DATA", "APT", "TOUR OPERATOR", "COMPAGNIA", "ASSISTENTE", "TURNO_FFILL", "TURNO_NORMALIZZATO",
+                "DATA", "APT", "TOUR OPERATOR", "COMPAGNIA", "ASSISTENTE", "VOLO", "DEST.NE", "TURNO_FFILL", "TURNO_NORMALIZZATO",
                 "INIZIO_DT", "FINE_DT", "DURATA_TURNO_MIN", "NO_DEC",
                 "ATD_SCELTO", "STD_SCELTO",
                 "TURNO_EUR",

@@ -422,6 +422,7 @@ def detect_columns(df: pd.DataFrame) -> Dict[str, Optional[str]]:
         "festivo": find_col(df, [r"^festivo$", r"holiday"]),
         "assistente": find_col(df, [r"^assistente$", r"\bassistente\b"]),
         "volo": find_col(df, [r"^volo$", r"numero\s*volo", r"n\.?\s*volo", r"flight"]),
+        "destinazione": find_col(df, [r"^DEST\.?NE$", r"^DEST$", r"DESTINAZIONE", r"DESTINATION"]),
     }
 
 
@@ -451,6 +452,7 @@ class BlockAgg:
     first_source: SourceRowRef
     assistente: Optional[str] = None
     volo: Optional[str] = None
+    destinazione: Optional[str] = None
     # optional "provided" values from the first row (for discrepancy sheet)
     provided_importo: Optional[float] = None
     provided_extra_min: Optional[int] = None
@@ -685,6 +687,14 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                         if volo_val == "" or volo_val == "nan":
                             volo_val = None
 
+                    # Extract destinazione from first row
+                    dest_col = cols.get("destinazione")
+                    dest_val = None
+                    if dest_col and dest_col in r.index:
+                        dest_val = str(r[dest_col]).strip() if pd.notna(r[dest_col]) else None
+                        if dest_val == "" or dest_val == "nan":
+                            dest_val = None
+
                     blocks[key] = BlockAgg(
                         date=d,
                         apt=apt,
@@ -698,6 +708,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                         first_source=src,
                         assistente=assistente_val,
                         volo=volo_val,
+                        destinazione=dest_val,
                         provided_importo=prov_importo,
                         provided_extra_min=prov_extra_min,
                         provided_night_min=prov_night_min,
@@ -776,6 +787,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
             "TOUR OPERATOR": cfg.to_keyword.capitalize(),  # Aggiungi TOUR OPERATOR
             "ASSISTENTE": b.assistente if b.assistente else "",
             "VOLO": b.volo if b.volo else "",
+            "DEST.NE": b.destinazione if b.destinazione else "",
             "TURNO_FFILL": b.turno_raw_ffill,
             "TURNO_NORMALIZZATO": b.turno_norm,
             "INIZIO_DT": b.start_dt,
@@ -927,6 +939,8 @@ def create_apt_detail_sheet(df_apt: pd.DataFrame) -> pd.DataFrame:
         'Data': df_apt['DATA'],
         'Tour Operator': df_apt['TOUR OPERATOR'].fillna('') if 'TOUR OPERATOR' in df_apt.columns else pd.Series([''] * len(df_apt)),
         'Turno': df_apt['TURNO_NORMALIZZATO'],
+        'Volo': df_apt['VOLO'].fillna('') if 'VOLO' in df_apt.columns else pd.Series([''] * len(df_apt)),
+        'Dest.ne': df_apt['DEST.NE'].fillna('') if 'DEST.NE' in df_apt.columns else pd.Series([''] * len(df_apt)),
         'Durata': df_apt['DURATA_H:MM'],
         'Turno (€)': df_apt['TURNO_EUR'].round(2),
         'Extra (h:mm)': df_apt['EXTRA_H:MM'],
@@ -954,6 +968,8 @@ def create_apt_detail_sheet(df_apt: pd.DataFrame) -> pd.DataFrame:
         'Data': 'TOTALE',
         'Tour Operator': '',
         'Turno': '',
+        'Volo': '',
+        'Dest.ne': '',
         'Durata': '',
         'Turno (€)': df_apt['TURNO_EUR'].sum(),
         'Extra (h:mm)': format_minutes_to_hmm(df_apt['EXTRA_MIN'].sum()),
@@ -1316,7 +1332,7 @@ def write_output_excel(output_path: str, detail_df: pd.DataFrame, totals_df: pd.
         # Order columns for readability
         if not detail_df.empty:
             cols = [
-                "DATA", "APT", "TOUR OPERATOR", "ASSISTENTE", "TURNO_FFILL", "TURNO_NORMALIZZATO",
+                "DATA", "APT", "TOUR OPERATOR", "ASSISTENTE", "VOLO", "DEST.NE", "TURNO_FFILL", "TURNO_NORMALIZZATO",
                 "INIZIO_DT", "FINE_DT", "DURATA_TURNO_MIN", "NO_DEC",
                 "ATD_SCELTO",
                 "TURNO_EUR",
