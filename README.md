@@ -91,7 +91,7 @@ L'app si aprirà su `http://localhost:8501`
   - "Codificato - Rilevato ma senza dati elaborati": Modulo presente ma nessun dato corrispondente nel file
   - "Modulo presente ma non rilevato nel file": Modulo disponibile ma non trovato nel file Excel
   - "Non codificato": Nessun modulo disponibile
-- **DettaglioBlocchi**: Dettaglio completo di tutti i blocchi elaborati con colonna AGENZIA
+- **DettaglioBlocchi**: Dettaglio completo di tutti i blocchi elaborati con colonne AGENZIA, VOLO e DEST.NE
 - **TotaliPeriodo**: Totali raggruppati per periodo (16-31, 1-15, MESE) con colonna AGENZIA
 - **Fogli per aeroporto**: Dettaglio per ogni aeroporto (VRN, BGY, NAP, VCE, ecc.) con colonna Agenzia
 - **TOTALE**: Riepilogo totale per aeroporto con colonna Agenzia
@@ -210,7 +210,7 @@ Il sistema:
 ### 5. Output
 - Genera un unico file Excel con:
   - Foglio "TourOperatourRilevati" (primo foglio) con lo status di tutti i tour operator
-  - Foglio "DettaglioBlocchi" con tutti i dettagli, incluso colonna AGENZIA
+  - Foglio "DettaglioBlocchi" con tutti i dettagli, incluso colonne AGENZIA, VOLO e DEST.NE
   - Foglio "TotaliPeriodo" con totali per periodo, incluso colonna AGENZIA
   - Fogli per ogni aeroporto, incluso colonna Agenzia
   - Foglio "TOTALE" con riepilogo per aeroporto, incluso colonna Agenzia

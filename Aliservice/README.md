@@ -36,13 +36,15 @@ Il programma legge file Excel "Piano Lavoro" con le seguenti colonne:
 - **ATD**: Orario decollo effettivo (opzionale)
 - **STD**: Orario decollo programmato (opzionale)
 - **ASSISTENTE**: Nome assistente (opzionale)
+- **VOLO**: Numero di volo (opzionale)
+- **DEST.NE**: Destinazione (opzionale)
 
 ## 📊 Output
 
 Il file Excel generato contiene:
 
 1. **DettaglioBlocchi**: Dettaglio di ogni blocco con:
-   - DATA, APT, ASSISTENTE
+   - DATA, APT, ASSISTENTE, VOLO, DEST.NE
    - TURNO_FFILL, TURNO_NORMALIZZATO
    - INIZIO_DT, FINE_DT, DURATA_TURNO_MIN
    - ATD_SCELTO, STD_SCELTO

@@ -25,7 +25,7 @@ python Baobab/consuntivobaobab.py -i "Piano lavoro DICEMBRE 25.xlsx" -o "OUT_BAO
 ## Output
 
 Il programma genera un file Excel con i seguenti fogli:
-- **DettaglioBlocchi**: Dettaglio completo di tutti i blocchi
+- **DettaglioBlocchi**: Dettaglio completo di tutti i blocchi (inclusi VOLO e DEST.NE)
 - **TotaliPeriodo**: Totali raggruppati per periodo (1-15, 16-31, MESE)
 - **Discrepanze**: Eventuali discrepanze tra valori calcolati e forniti
 - **Fogli per aeroporto** (VRN, BGY, ecc.): Dettaglio per ogni aeroporto

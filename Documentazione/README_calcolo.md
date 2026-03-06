@@ -283,7 +283,7 @@ Il programma genera un file Excel con 3 fogli:
 ### 1. DettaglioBlocchi
 
 Contiene ogni blocco con:
-- DATA, APT, TURNO_NORMALIZZATO
+- DATA, APT, VOLO, DEST.NE, TURNO_NORMALIZZATO
 - DURATA_TURNO_MIN, TURNO_EUR
 - EXTRA_MIN, EXTRA_EUR
 - NOTTE_MIN, NOTTE_EUR
