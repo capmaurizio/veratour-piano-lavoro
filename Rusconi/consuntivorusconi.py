@@ -380,6 +380,8 @@ def detect_columns(df: pd.DataFrame) -> Dict[str, Optional[str]]:
         "notturno": find_col(df, [r"^NOTTURNO$", r"\bNIGHT\b"]),
         "festivo": find_col(df, [r"^FESTIVO$", r"\bHOLIDAY\b"]),
         "assistente": find_col(df, [r"^ASSISTENTE$", r"\bASSISTENTE\b"]),
+        "volo": find_col(df, [r"^VOLO$", r"NUMERO\s*VOLO", r"N\.?\s*VOLO", r"FLIGHT"]),
+        "destinazione": find_col(df, [r"^DEST\.?NE$", r"^DEST$", r"DESTINAZIONE", r"DESTINATION"]),
     }
 
 
@@ -411,6 +413,8 @@ class BlockAgg:
     assistente: Optional[str] = None
     tour_operator_originale: Optional[str] = None  # TOUR OPERATOR originale dalla riga
     passeggeri: Optional[int] = None  # Numero passeggeri per carte di imbarco
+    volo: Optional[str] = None  # Numero volo
+    destinazione: Optional[str] = None  # Destinazione
     errore: Optional[str] = None  # Messaggio di errore se i dati non sono validi
 
 
@@ -544,6 +548,23 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                     if parsed:
                         std_times.append(parsed)
 
+                # Extract VOLO e DESTINAZIONE
+                volo_val = None
+                if cols.get("volo") and cols["volo"] in r.index:
+                    v = r[cols["volo"]]
+                    if pd.notna(v):
+                        volo_val = str(v).strip()
+                        if volo_val.lower() in ("nan", "none", ""):
+                            volo_val = None
+
+                destinazione_val = None
+                if cols.get("destinazione") and cols["destinazione"] in r.index:
+                    d_val = r[cols["destinazione"]]
+                    if pd.notna(d_val):
+                        destinazione_val = str(d_val).strip()
+                        if destinazione_val.lower() in ("nan", "none", ""):
+                            destinazione_val = None
+
                 # Extract PASSEGGERI per carte di imbarco
                 passeggeri_val = None
                 if cols.get("passeggeri"):
@@ -615,6 +636,8 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                         assistente=assistente_val if assistente_val else None,
                         tour_operator_originale=tour_operator_orig,
                         passeggeri=passeggeri_val,
+                        volo=volo_val,
+                        destinazione=destinazione_val,
                     )
 
     # Converti blocchi in DataFrame per output
@@ -723,6 +746,8 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
             "APT": b.apt,
             "TOUR OPERATOR": tour_operator_val,
             "ASSISTENTE": b.assistente if b.assistente else "",
+            "VOLO": b.volo if b.volo else "",
+            "DEST.NE": b.destinazione if b.destinazione else "",
             "TURNO_FFILL": b.turno_raw_ffill,
             "TURNO_NORMALIZZATO": b.turno_norm,
             "INIZIO_DT": start_rusconi if not pd.isna(start_rusconi) else b.start_dt,
