@@ -174,8 +174,8 @@ L'app si aprirà su `http://localhost:8501`
 - **Status**: ✅ Operativo
 - **Modulo**: `Rusconi/consuntivorusconi.py`
 - **Caratteristiche speciali**:
-  - **Base fissa**: €100 per aeroporti nazionali, €110 per FCO e VCE
-  - **Extra solo su ritardo**: Solo per ATD > STD (ritardo volo)
+  - **Base fissa**: €100 per aeroporti nazionali, BGY €110, FCO €115, VCE €140
+  - **Extra solo su ritardo**: Solo per ATD > STD (ritardo volo), €20/h
   - **Notturno**: +20% su (Base + Extra), calcolato proporzionalmente ai minuti notturni
   - **Servizi accessori**: Costo carte imbarco basato su numero passeggeri (soglia 20)
 - **Regole**: Documentate in `Rusconi/CalcolatariffeRusconi.txt`
@@ -391,5 +391,5 @@ Le opzioni di calcolo (precedentemente nella sidebar) ora usano valori di defaul
 
 ---
 
-**Ultimo aggiornamento**: Gennaio 2025  
-**Versione**: 2.0 - Multi-Tour Operatour con Rilevamento Dinamico
+**Ultimo aggiornamento**: Febbraio 2026  
+**Versione**: 2.1 - Multi-Tour Operatour con Rilevamento Dinamico
