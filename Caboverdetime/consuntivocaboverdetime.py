@@ -85,11 +85,11 @@ class RoundingPolicy:
 
 
 # Tariffe base Caboverdetime per 3 ore (180 min) - FISSA per tutti gli aeroporti
-TARIFFA_BASE_CABOVERDETIME = 85.0  # €85,00 fisso
+TARIFFA_BASE_CABOVERDETIME = 90.0  # €90,00 fisso
 
 # Tariffa notturna Caboverdetime (€/min) - FISSA per tutti gli aeroporti
-# €5,67/ora = €0,095/min
-TARIFFA_NOTTE_CABOVERDETIME = 0.095  # €0,095/min fisso
+# €6,00/ora = €0,10/min (base €90 / 3h = €30/h × 20% = €6/h)
+TARIFFA_NOTTE_CABOVERDETIME = 0.10  # €0,10/min fisso
 
 
 @dataclass
@@ -286,7 +286,7 @@ def night_minutes(start_dt: pd.Timestamp, end_dt: pd.Timestamp) -> int:
 
 
 def compute_turno_eur(apt: str) -> float:
-    """Calcola importo turno base (sempre 3 ore = 180 min) - FISSO €85,00"""
+    """Calcola importo turno base (sempre 3 ore = 180 min) - FISSO €90,00"""
     return TARIFFA_BASE_CABOVERDETIME
 
 
@@ -300,7 +300,7 @@ def compute_extra_eur(durata_effettiva_min: int, cfg: CalcConfig) -> float:
 
 
 def compute_night_eur(night_min: int, apt: str) -> float:
-    """Calcola importo notturno: night_min × €0,095/min (FISSO per tutti gli aeroporti)"""
+    """Calcola importo notturno: night_min × €0,10/min (FISSO per tutti gli aeroporti)"""
     return night_min * TARIFFA_NOTTE_CABOVERDETIME
 
 
@@ -641,9 +641,9 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
             start_caboverdetime = cvc_dt if pd.notna(cvc_dt) else b.start_dt
             end_caboverdetime = atd_sel if pd.notna(atd_sel) else b.end_dt
         else:
-            # Base: da CVC a STD (durata base = 3 ore = 180 min, costo fisso €85)
+            # Base: da CVC a STD (durata base = 3 ore = 180 min, costo fisso €90)
             # La durata base è sempre 3 ore, indipendentemente dalla durata effettiva CVC-STD
-            turno_eur = compute_turno_eur(b.apt)  # €85,00 fisso
+            turno_eur = compute_turno_eur(b.apt)  # €90,00 fisso
             
             # Extra: da STD a ATD (solo se ATD > STD)
             if pd.notna(atd_sel) and atd_sel > std_sel:
