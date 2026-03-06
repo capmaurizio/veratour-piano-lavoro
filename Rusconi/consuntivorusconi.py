@@ -111,7 +111,7 @@ class CalcConfig:
     holiday_dates: Optional[set[date]] = None  # optional external list
     
     # Tariffe Rusconi
-    rate_extra_per_h: float = 18.0  # €18/h = €0.30/min
+    rate_extra_per_h: float = 20.0  # €20/h = €0.333/min
     durata_base_min: int = 150  # 2h30 = 150 minuti
     festivo_multiplier: float = 1.30  # +30% per festivi
 
@@ -303,7 +303,7 @@ def compute_turno_eur(apt: str) -> float:
 
 def compute_extra_eur(durata_effettiva_min: int, cfg: CalcConfig) -> float:
     """
-    Calcola importo extra: MAX(0, durata_effettiva - 180) × €18/h = €0.30/min
+    Calcola importo extra: MAX(0, durata_effettiva - 180) × €20/h = €0.333/min
     Le ore extra decorrono dal decollo schedulato (STD)
     """
     extra_min = max(0, durata_effettiva_min - cfg.durata_base_min)
@@ -666,7 +666,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
             if pd.notna(atd_sel) and atd_sel > std_sel:
                 durata_extra_min = int((atd_sel - std_sel).total_seconds() / 60.0)
                 extra_min = durata_extra_min
-                # Calcola extra: durata_extra_min × €18/h = durata_extra_min × €0.30/min
+                # Calcola extra: durata_extra_min × €20/h = durata_extra_min × €0.333/min
                 extra_eur = durata_extra_min * (cfg.rate_extra_per_h / 60.0)
             else:
                 durata_extra_min = 0
