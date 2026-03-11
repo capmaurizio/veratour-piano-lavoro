@@ -50,7 +50,14 @@ Questa cartella (nella **root del progetto**) contiene la documentazione di depl
 - Discrepanze e verifiche
 - Precisione e arrotondamenti
 
+## 🛠️ Fix e Modifiche
+
+### [CHANGELOG_FIXES.md](CHANGELOG_FIXES.md)
+**Storico delle correzioni al sistema**
+- Bug risolti con descrizione del problema e della soluzione
+- Esempi concreti per ogni fix
+- Guida per documentare nuove modifiche
+
 ---
 
-**Ultimo aggiornamento**: Gennaio 2025
-
+**Ultimo aggiornamento**: Marzo 2026

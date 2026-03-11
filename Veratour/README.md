@@ -42,7 +42,11 @@ python3 consuntivoveratour.py -i "Piano lavoro DICEMBRE 25.xlsx" -o "OUT_DIC.xls
 
 ### Extra
 - **18€/ora** per ore lavorate oltre la fine del turno
-- Basato su ATD (Actual Time of Departure)
+- Basato su **ATD** (Actual Time of Departure): si prende il **massimo ATD strettamente > fine turno**
+- **Voli multipli nello stesso turno**: quando più voli condividono lo stesso turno (es. W46925 + NO 7939 in `11:40-16:40 DEC`), tutti i loro ATD vengono raccolti e si usa il massimo
+- **STD come fallback**: se l'ATD non è disponibile, si usa la STD come decollo garantito minimo
+- **Filtraggio ATD anomali**: valori ATD con più di 2 ore di anticipo rispetto alla STD vengono scartati (sono errori di inserimento nel foglio)
+- **Colonna STD**: rilevata automaticamente dal file Excel (colonna `std`)
 
 ### Notturno
 - Maggiorazione per ore tra **23:00 e 05:00**
@@ -86,5 +90,5 @@ L'applicazione è deployata su **Streamlit Cloud**:
 
 ---
 
-**Ultimo aggiornamento**: Gennaio 2025
+**Ultimo aggiornamento**: Marzo 2026 — Fix calcolo extra NAP (voli multipli, STD fallback, ATD anomali)
 
