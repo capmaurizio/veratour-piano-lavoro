@@ -408,18 +408,19 @@ def find_col(df: pd.DataFrame, patterns: Iterable[str]) -> Optional[str]:
 def detect_columns(df: pd.DataFrame) -> Dict[str, Optional[str]]:
     """
     Map:
-      data, tour_operator, apt, turno, atd, importo, ore_extra, notturno, festivo, assistente
+      data, tour_operator, apt, turno, std, atd, importo, ore_extra, notturno, festivo, assistente
     """
     return {
-        "data": find_col(df, [r"^data$", r"date"]),
-        "tour_operator": find_col(df, [r"tour\s*operator", r"^to$", r"operatore"]),
-        "apt": find_col(df, [r"^apt$", r"aeroporto", r"scalo"]),
-        "turno": find_col(df, [r"^turno$", r"turni"]),
-        "atd": find_col(df, [r"^atd$", r"orario\s*atd"]),
-        "importo": find_col(df, [r"^importo$", r"totale", r"importo"]),
-        "ore_extra": find_col(df, [r"ore\s*extra", r"^extra$", r"extra\s*(min|ore)"]),
-        "notturno": find_col(df, [r"^notturno$", r"night"]),
-        "festivo": find_col(df, [r"^festivo$", r"holiday"]),
+        "data": find_col(df, [r"^data$", r"\bdate\b"]),
+        "tour_operator": find_col(df, [r"tour\s*operator", r"^to$", r"\boperatore\b"]),
+        "apt": find_col(df, [r"^apt$", r"\baeroporto\b", r"\bscalo\b"]),
+        "turno": find_col(df, [r"^turno$", r"\bturni\b"]),
+        "std": find_col(df, [r"^std$", r"\borario\s*std\b"]),
+        "atd": find_col(df, [r"^atd$", r"\borario\s*atd\b"]),
+        "importo": find_col(df, [r"^importo$", r"\btotale\b", r"\bimporto\b"]),
+        "ore_extra": find_col(df, [r"\bore\s*extra\b", r"^extra$", r"\bextra\s*(min|ore)\b"]),
+        "notturno": find_col(df, [r"^notturno$", r"\bnight\b"]),
+        "festivo": find_col(df, [r"^festivo$", r"\bholiday\b"]),
         "assistente": find_col(df, [r"^assistente$", r"\bassistente\b"]),
         "volo": find_col(df, [r"^volo$", r"numero\s*volo", r"n\.?\s*volo", r"flight"]),
         "destinazione": find_col(df, [r"^DEST\.?NE$", r"^DEST$", r"DESTINAZIONE", r"DESTINATION"]),
@@ -476,7 +477,7 @@ def extract_atd_candidates(val) -> List[Tuple[int, int]]:
     s = s.replace(".", ":")
     s = s.replace(";", ":")  # Gestisce punto e virgola
     # find all tokens like 8, 8:10, 08:10
-    tokens = re.findall(r"(\d{1,2})(?::(\d{1,2}))?", s)
+    tokens = re.findall(r"\b(\d{1,2})(?::(\d{1,2}))?\b", s)
     out = []
     for hh, mm in tokens:
         h = int(hh)
@@ -588,8 +589,9 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
 
             # Filter APT if requested
             if cfg.apt_filter and cols["apt"]:
-                apt_pat = "|".join([re.escape(a) for a in cfg.apt_filter])
-                mask_apt = sdf[cols["apt"]].astype(str).str.contains(rf"({apt_pat})", case=False, na=False)
+                # Usa upper() per confronto diretto senza regex groups (evita warning pandas)
+                apt_upper = sdf[cols["apt"]].astype(str).str.strip().str.upper()
+                mask_apt = apt_upper.isin([a.upper() for a in cfg.apt_filter])
                 sdf = sdf[mask_apt].copy()
                 if sdf.empty:
                     continue
@@ -605,8 +607,11 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
             sdf["__global_order"] = np.arange(global_order, global_order + len(sdf), dtype=int)
             global_order += len(sdf)
 
-            # Forward-fill TURNO per DATA within the sheet chunk order (already in original read order)
+            # Forward-fill TURNO per DATA within the sheet chunk order (already in original read order).
+            # Il turno si propaga a TUTTI i voli dello stesso giorno/apt (inclusi quelli senza TURNO esplicito),
+            # permettendo a più voli in turnate spezzate di condividere lo stesso blocco.
             turno_col = cols["turno"]
+            std_col = cols.get("std")
             sdf["__turno_raw"] = sdf[turno_col].astype(str)
             ffill_src = sdf[turno_col].replace("", np.nan)
             sdf["__turno_ffill_raw"] = ffill_src.groupby(sdf["__date"]).ffill()
@@ -653,6 +658,11 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                 atd_times: List[Tuple[int, int]] = []
                 if cols["atd"]:
                     atd_times.extend(extract_atd_candidates(r[cols["atd"]]))
+                # Aggiungi STD come candidato ATD di fallback (volo decollato in orario o in ritardo)
+                if std_col and std_col in r.index:
+                    std_parsed = parse_time_value(r[std_col])
+                    if std_parsed:
+                        atd_times.append(std_parsed)
 
                 # Anchor ATDs to date; if ATD < start_dt => +1 day
                 atd_dt_list: List[pd.Timestamp] = []
@@ -660,6 +670,17 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                     tdt = d + pd.Timedelta(hours=hh, minutes=mm)
                     if tdt < r["__start_dt"]:
                         tdt = tdt + pd.Timedelta(days=1)
+                    # Filtra ATD anomali: ATD valido deve essere >= STD - 2h
+                    # (valori molto antecedenti alla STD sono errori di inserimento)
+                    if std_col and std_col in r.index:
+                        std_parsed = parse_time_value(r[std_col])
+                        if std_parsed:
+                            std_tdt = d + pd.Timedelta(hours=std_parsed[0], minutes=std_parsed[1])
+                            if std_tdt < r["__start_dt"]:
+                                std_tdt = std_tdt + pd.Timedelta(days=1)
+                            # Scarta ATD se è più di 2 ore prima della STD (probabile errore)
+                            if tdt < std_tdt - pd.Timedelta(hours=2):
+                                continue
                     atd_dt_list.append(tdt)
 
                 # Determine first-source reference (first appearance of the block)
