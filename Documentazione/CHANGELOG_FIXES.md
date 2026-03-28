@@ -4,6 +4,43 @@ Questo file documenta le correzioni e le modifiche significative apportate al si
 
 ---
 
+## [2026-03-28] Fix formula Excel ore extra NAP — Collaboratori/Fattura
+
+**File modificati**:
+- `genera_file_calcolo_assistente.py`
+- `genera_template_assistente.py`
+
+### Problema riscontrato
+La formula Excel generata per il calcolo degli **importi extra** nel foglio fattura/riepilogo assistente usava **sempre €8/h** (hardcoded `=8/60*minuti`) indipendentemente dall'aeroporto.
+
+Per **NAP (Napoli)** le tariffe corrette sono:
+- **Senior**: €12/h per ore extra
+- **Junior**: €10/h per ore extra
+
+Questo causava un **errore sistematico** nel calcolo della colonna "Importo netto extra" (colonna O del template):
+- Esempio: 30 minuti extra a NAP Senior = `30/60 × 12 = €6.00` (corretto) vs `30/60 × 8 = €4.00` (sbagliato con bug)
+
+### Soluzione applicata
+
+| Fix | Dettaglio |
+|-----|-----------|
+| **`genera_formula_excel_extra()`** | Aggiunto parametro `tariffa_extra_per_h` (default €12) — non più hardcoded €8 |
+| **`TARIFFE_EXTRA_PER_APT`** | Aggiunto dizionario con tariffe orarie extra per aeroporto (NAP=12, FCO=12, BGY=8, …) |
+| **Template genera** | Formula ora usa la tariffa corretta dell'aeroporto del turno specifico |
+| **NAP Standard** | Aggiunto ramo `elif apt_upper == 'NAP'` nel file calcolo generato (prima andava in default €58 errato) |
+
+### Tariffe corrette (Accordo 2026)
+
+| Aeroporto | Senior Extra | Junior Extra |
+|-----------|-------------|-------------|
+| NAP | €12/h | €10/h |
+| FCO Standard | €12/h | €12/h |
+| FCO Incentive | €15/h | €15/h |
+| VRN | €12/h | €12/h |
+| BGY | €10/h | €8/h |
+
+---
+
 ## [2026-03-11] Fix calcolo extra NAP — Veratour
 
 **File modificato**: `Veratour/consuntivoveratour.py`

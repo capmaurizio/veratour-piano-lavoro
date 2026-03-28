@@ -1047,11 +1047,16 @@ def calcola_tariffa_collaboratore(
         is_sand = 'SAND' in to_upper
         
         # Calcola extra
+        # NOTA: durata_min = durata turno base (CVC → fine_turno senza ritardi)
+        #        extra_min  = minuti ritardo ATD oltre STD (separati, NON inclusi in durata_min)
+        # I due valori sono distinti: NON c'è doppio conteggio.
         if is_sand:
-            extra = 0.0
+            extra = 0.0  # SAND: no extra per contratto
         else:
+            # Extra per ore oltre la durata base forfait (es. turno 4h con base 3h → 1h extra)
             ore_extra_base = max(0, durata_h - durata_base_h)
             extra = ore_extra_base * extra_eur_per_h
+            # Extra per ritardi ATD (decollo ritardato oltre STD)
             if extra_min > 0:
                 extra += (extra_min / 60.0) * extra_eur_per_h
         

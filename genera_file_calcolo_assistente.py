@@ -124,14 +124,20 @@ def calcola_tariffa_turno(
     elif apt_upper == 'NAP' and tipo_servizio == 'transfer':
         base_eur = 50.0
         durata_base_h = 2.5
-        extra_eur_per_h = 12.0
+        extra_eur_per_h = 12.0  # Senior transfer
         notturno_perc = 0.15
     # NAP - Tariffe Arrivi (Meet & Greet)
     elif apt_upper == 'NAP' and tipo_servizio == 'arrivi':
         base_eur = 56.0
         durata_base_h = 2.5
-        extra_eur_per_h = 12.0
+        extra_eur_per_h = 12.0  # Senior meet&greet
         notturno_perc = 0.15
+    # NAP - Tariffe Standard Senior (Accordo NAP 2026)
+    elif apt_upper == 'NAP':
+        base_eur = 56.0   # Senior: €56/3h  (Junior: €50/3h - modificare se junior)
+        durata_base_h = 3.0
+        extra_eur_per_h = 12.0  # Senior: €12/h  (Junior: €10/h - modificare se junior)
+        notturno_perc = 0.15  # +15% NAP
     # REGOLE STANDARD per altri aeroporti
     else:
         # Valori di default - MODIFICARE secondo tariffe specifiche
@@ -196,17 +202,26 @@ def calcola_tariffa_turno(
     }}
 
 
-def genera_formula_excel_extra(minuti_extra: int) -> str:
+def genera_formula_excel_extra(minuti_extra: int, tariffa_extra_per_h: float = 12.0) -> str:
     """
-    Genera formula Excel per calcolo extra: =8/60*[minuti]
+    Genera formula Excel per calcolo extra basata sulla tariffa oraria corretta.
+    
+    TARIFFE EXTRA PER AEROPORTO (Accordo 2026):
+      NAP Senior: €12/h  |  NAP Junior: €10/h
+      FCO standard: €12/h  |  FCO incentive: €15/h
+      VRN Senior/Junior: €12/h
+      BGY Junior: €8/h  |  BGY Senior: €10/h
     
     Args:
-        minuti_extra: Minuti extra
+        minuti_extra: Minuti extra (ritardi ATD oltre STD)
+        tariffa_extra_per_h: Tariffa oraria extra (default €12/h = NAP Senior / FCO standard)
     
     Returns:
-        Formula Excel (es. "=8/60*30")
+        Formula Excel (es. "=12/60*30" per 30 min a NAP Senior)
     """
-    return f"=8/60*{minuti_extra}"
+    # Usa la tariffa corretta per aeroporto, NON sempre 8/60 (che era BGY Junior)
+    tariff_str = int(tariffa_extra_per_h) if tariffa_extra_per_h == int(tariffa_extra_per_h) else tariffa_extra_per_h
+    return f"={tariff_str}/60*{minuti_extra}"
 
 
 def genera_formula_excel_totale(riga: int) -> str:

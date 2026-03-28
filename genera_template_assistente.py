@@ -23,6 +23,23 @@ TEMPLATE_PATH = os.path.join(
     "RIEPILOGO ASSISTENZE  BGY SORRENTI GAIA .xlsx"
 )
 
+# Tariffa extra oraria per aeroporto (Accordo 2026) - usata per le formule Excel
+# NAP Senior: €12/h, NAP Junior: €10/h, FCO: €12/h, FCO Incentive: €15/h, VRN: €12/h, BGY Senior: €10/h, BGY Junior: €8/h
+TARIFFE_EXTRA_PER_APT = {
+    'NAP': 12.0,   # Senior default — per junior cambia in 10.0
+    'FCO': 12.0,
+    'VRN': 12.0,
+    'BGY': 8.0,    # Junior default — per senior cambia in 10.0
+    'MXP': 12.0,
+    'CTA': 12.0,
+    'PMO': 12.0,
+    'PSA': 12.0,
+    'BRI': 12.0,
+    'BLQ': 12.0,
+    'VCE': 12.0,
+    'TSF': 12.0,
+}
+
 def parse_time_value(val) -> Optional[time]:
     """Converte un valore in time object"""
     if pd.isna(val):
@@ -429,15 +446,32 @@ def genera_template_assistente(
             # Non generiamo formula automatica qui, l'assistente compilerà manualmente
             
             # Importo netto extra (colonna O) - formula generata dal file calcolo assistente
+            # Determina la tariffa oraria extra corretta per l'aeroporto di questo turno
+            apt_del_turno = str(row_piano.get('APT', '')).strip().upper()
+            tipo_servizio_del_turno = str(row_piano.get('SERVIZIO', row_piano.get('SERVIZI', ''))).strip().upper()
+            # Tariffa oraria extra corretta per aeroporto
+            tariffa_extra_h = TARIFFE_EXTRA_PER_APT.get(apt_del_turno, 12.0)
+            # Aggiustamenti per tipo servizio
+            if apt_del_turno == 'FCO' and 'INCENTIVE' in tipo_servizio_del_turno:
+                tariffa_extra_h = 15.0  # FCO incentive: €15/h
+            elif apt_del_turno == 'NAP' and ('ARRIVI' in tipo_servizio_del_turno or 'MEET' in tipo_servizio_del_turno):
+                tariffa_extra_h = 12.0  # NAP meet&greet: €12/h Senior
+            elif apt_del_turno == 'NAP' and 'TRANSFER' in tipo_servizio_del_turno:
+                tariffa_extra_h = 12.0  # NAP transfer: €12/h Senior
+            
             if modulo_calcolo and hasattr(modulo_calcolo, 'genera_formula_excel_extra'):
-                if extra_min > 0:
-                    formula_extra = modulo_calcolo.genera_formula_excel_extra(extra_min)
+                import inspect
+                sig = inspect.signature(modulo_calcolo.genera_formula_excel_extra)
+                if 'tariffa_extra_per_h' in sig.parameters:
+                    # File calcolo aggiornato: supporta il parametro tariffa
+                    formula_extra = modulo_calcolo.genera_formula_excel_extra(extra_min, tariffa_extra_h)
                 else:
-                    # Formula base anche se 0, l'assistente modificherà
-                    formula_extra = modulo_calcolo.genera_formula_excel_extra(0)
+                    # File calcolo vecchio: chiama senza parametro (usa default hardcoded)
+                    formula_extra = modulo_calcolo.genera_formula_excel_extra(extra_min)
             else:
-                # Formula generica se non c'è file calcolo
-                formula_extra = f"=8/60*{extra_min if extra_min > 0 else 0}"
+                # Formula generica se non c'è file calcolo — usa tariffa corretta per APT
+                tariff_str = int(tariffa_extra_h) if tariffa_extra_h == int(tariffa_extra_h) else tariffa_extra_h
+                formula_extra = f"={tariff_str}/60*{extra_min if extra_min > 0 else 0}"
             
             try:
                 cella_o = ws_riepilogo.cell(row=idx, column=15)
