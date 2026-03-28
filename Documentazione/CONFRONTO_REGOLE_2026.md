@@ -20,14 +20,15 @@
 - ✅ **BAOBAB e altri TO**: 3h da CVC, extra da ATD se supera le 3h - **GIÀ IMPLEMENTATO**
 
 ### 2. **FIUMICINO (FCO) - Assistenti Senior P.IVA**
-- ✅ **Durata base**: 2h30' - **GIÀ IMPLEMENTATO** (tramite file Excel)
-- ✅ **Assistenza base**: €56,00 + IVA per 2h30' - **DA VERIFICARE NEL FILE EXCEL**
-- ✅ **Ore extra**: €12,00 + IVA all'ora - **GIÀ IMPLEMENTATO**
-- ✅ **Incentive**: €60,00 + IVA per 2h30', extra €15,00 + IVA/h - **DA VERIFICARE NEL FILE EXCEL**
-- ✅ **Arrivi (Meet & Greet)**: €56,00 + IVA per 2h30' - **DA VERIFICARE NEL FILE EXCEL**
-- ✅ **Notturno**: +20% su base/extra/incentive, fascia 23:00-06:00 (SAND: 23:00-03:30) - **GIÀ IMPLEMENTATO**
-- ✅ **Festivi**: +20% su tutto - **GIÀ IMPLEMENTATO**
+- ✅ **Durata base**: 2h30\' - **IMPLEMENTATO e HARDCODATO** nel calcolatore collaboratori
+- ✅ **Assistenza base**: €56,00 + IVA per 2h30\' - **IMPLEMENTATO**
+- ✅ **Ore extra**: €12,00 + IVA all\'ora - **IMPLEMENTATO**
+- ✅ **Incentive**: €60,00 + IVA per 2h30\', extra €15,00 + IVA/h - **IMPLEMENTATO**
+- ✅ **Arrivi (Meet & Greet)**: €56,00 + IVA per 2h30\' - **IMPLEMENTATO**
+- ✅ **Notturno (TIMELINE ESATTA)**: +20%. Il sistema ora sdoppia il notturno ricostruendo la timeline: calcola quante ore del forfait 2h30 cadono in fascia notturna (+€4,48/h) e quante ore extra cadono in fascia notturna (+€2,40/h). Fascia 23:00-06:00 (SAND: 23:00-03:30). - **IMPLEMENTATO**
+- ✅ **Festivi**: +20% su tutto, incluso il 29 Giugno (Santi Pietro e Paolo) - **IMPLEMENTATO**
 - ✅ **Start assistenza**: orario di convocazione (NON anticipazioni) - **GIÀ IMPLEMENTATO**
+- ✅ **Gestione Dati Corrotti**: Se mancano gli orari di inizio/fine turno negli input dei TO, il sistema espone l\'errore in una colonna "NOTE" nell\'export Excel collaboratori. - **IMPLEMENTATO**
 
 ### 3. **NAPOLI (NAP) - Assistenti Senior e Junior**
 - ✅ **Durata base**: 2h30' - **GIÀ IMPLEMENTATO**
@@ -64,18 +65,8 @@
 
 Le seguenti regole sono **già supportate dal sistema** tramite il file Excel `TARIFFE COLLABORATORI 2026 DEF.xlsx`, ma **devono essere verificate** che corrispondano esattamente alle nuove regole:
 
-### 1. **FCO - Tariffe Incentive**
-- **Nuova regola**: €60,00 + IVA per 2h30', extra €15,00 + IVA/h
-- **Verifica**: Controllare che nel file Excel ci siano le colonne:
-  - `Incentive Base €` = 60.00
-  - `Durata Incentive` = 2.5h
-  - `Extra Incentive €/h` = 15.00
-
-### 2. **FCO - Tariffe Arrivi**
-- **Nuova regola**: €56,00 + IVA per 2h30', extra €12/h per prolungamenti
-- **Verifica**: Controllare che nel file Excel ci sia:
-  - `Arrivi €` = 56.00
-  - `Durata Arrivi` = 2.5h
+### 1. **FCO - Tariffe Incentive e Arrivi**
+- **Stato**: ✅ **RISOLTO**. Tutta la logica di FCO per Incentive, Arrivi e Partenze Standard è stata spostata internamente al codice e non dipende più dai valori inseriti nel file excel `TARIFFE COLLABORATORI 2026 DEF.xlsx`. Le tariffe (es. €56 base, €12 extra, €60 incentive) e la timeline cronologica esatta per lo sdoppiamento del notturno sono **hardcodate** nel modulo `tariffe_collaboratori.py` per conformità assoluta e isolata all'Accordo 2026.
 
 ### 3. **NAP - Tariffe Transfer**
 - **Nuova regola**: €50,00 forfettario
