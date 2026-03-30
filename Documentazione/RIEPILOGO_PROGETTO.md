@@ -143,6 +143,11 @@ Excel upload
 ### Componenti
 - **Login card** con logo SCAY, username/password
 - **File uploader** Excel (.xlsx / .xls)
+- **🔍 Diagnostica struttura file** (nuova) — espanso automaticamente se il file ha problemi:
+  - ⚠️ Foglio non chiamato `"PIANO VOLI"` → mostra fogli trovati
+  - ⚠️ Colonne con nomi alternativi (es. `"H"` invece di `"DATA"`)
+  - 🔴 Colonne obbligatorie completamente assenti (DATA, APT, TURNO, STD, ATD, TOUR OPERATOR)
+  - 💡 Suggerimento su come correggere il file
 - **Status lines** colorate (info / success / warn / error)
 - **Stat cards** — Tour Operator elaborati, Blocchi calcolati, Discrepanze
 - **Download button** Excel risultati (in alto e in basso)

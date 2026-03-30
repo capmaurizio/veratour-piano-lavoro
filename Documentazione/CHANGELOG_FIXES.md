@@ -4,6 +4,53 @@ Questo file documenta le correzioni e le modifiche significative apportate al si
 
 ---
 
+## [2026-03-30] Diagnostica struttura file Excel — Avvisi a video prima dell'elaborazione
+
+**File modificato**: `app_streamlit.py`  
+**Commit**: `5b307af`
+
+### Problema riscontrato
+Quando veniva caricato un file Excel con struttura non standard (es. foglio chiamato
+`"Foglio1"` invece di `"PIANO VOLI"`, o colonna `"H"` invece di `"DATA"`), il sistema
+procedeva silenziosamente all'elaborazione producendo un **file di output vuoto** senza
+alcuna spiegazione all'utente.
+
+Esempio: il file `P.L. MARZO 2026.xlsx` aveva:
+- Foglio: `"Foglio1"` (invece di `"PIANO VOLI"`)
+- Colonna data: `"H"` (invece di `"DATA"`)
+- Colonna convocazione: `"CONV.NE"` (invece di `"STD"`)
+
+### Soluzione applicata
+
+Aggiunta la funzione `validate_file_structure()` in `app_streamlit.py` che viene
+eseguita subito dopo il caricamento del file e **prima** del pulsante "Esegui elaborazione".
+
+| Controllo | Comportamento |
+|-----------|---------------|
+| Foglio `"PIANO VOLI"` assente | 🟡 Warning con elenco fogli trovati |
+| Colonna standard assente ma nome alternativo rilevato | ⚠️ Warning col nome trovato |
+| Colonna obbligatoria completamente mancante | 🔴 Errore con nomi accettati |
+| Foglio senza dati | 🔴 Errore "Il foglio non contiene dati" |
+| Todo ok | Nessun messaggio, elaborazione diretta |
+
+### Colonne verificate
+
+| Colonna attesa | Nomi alternativi accettati |
+|----------------|---------------------------|
+| `DATA` | `H`, `DATA VOLO`, `DATA/ORA` |
+| `APT` | `AEROPORTO`, `AIRPORT` |
+| `TURNO` | `NOTE E TURNI`, `TURNI` |
+| `STD` | `CONV.NE`, `CONVOCAZIONE`, `STD (ORA DEP)` |
+| `ATD` | `ATD REALE`, `PARTENZA REALE` |
+| `TOUR OPERATOR` | `OPERATORE`, `TO` |
+
+### Come risolvere file non standard
+Il messaggio in app suggerisce all'utente di rinominare il foglio in `PIANO VOLI`
+e di assicurarsi che le colonne abbiano i nomi standard. È comunque possibile
+tentare l'elaborazione anche in presenza di warning.
+
+---
+
 ## [2026-03-28] Fix formula Excel ore extra NAP — Collaboratori/Fattura
 
 **File modificati**:

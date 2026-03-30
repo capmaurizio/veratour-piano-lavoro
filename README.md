@@ -389,7 +389,15 @@ Le opzioni di calcolo (precedentemente nella sidebar) ora usano valori di defaul
 - Il foglio "TourOperatourRilevati" fornisce una panoramica completa dello status di tutti i tour operator rilevati
 - I fogli per aeroporto includono sempre le colonne "Agenzia" e "Tour Operator" per chiarezza
 
+### Diagnostica Struttura File
+Prima di eseguire l'elaborazione, il sistema controlla automaticamente la struttura del file Excel caricato e mostra avvisi chiari in caso di problemi:
+- **Foglio "PIANO VOLI"**: il foglio deve chiamarsi esattamente `PIANO VOLI`. Se assente, viene mostrato un avviso con l'elenco dei fogli trovati
+- **Colonne obbligatorie**: vengono verificate `DATA`, `APT`, `TOUR OPERATOR`, `TURNO`, `STD`, `ATD`
+- **Nomi alternativi**: se una colonna ha un nome diverso ma riconoscibile (es. `H` per `DATA`, `CONV.NE` per `STD`) viene segnalata come warning
+- In caso di errori critici viene mostrato un suggerimento su come correggere il file sorgente
+- L'elaborazione può essere comunque tentata ma il risultato potrebbe essere incompleto
+
 ---
 
-**Ultimo aggiornamento**: Febbraio 2026  
-**Versione**: 2.1 - Multi-Tour Operatour con Rilevamento Dinamico
+**Ultimo aggiornamento**: Marzo 2026  
+**Versione**: 2.2 - Multi-Tour Operatour con Diagnostica Struttura File
