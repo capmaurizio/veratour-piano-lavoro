@@ -4,6 +4,50 @@ Questo file documenta le correzioni e le modifiche significative apportate al si
 
 ---
 
+## [2026-03-30] Fix calcolo notturno FCO — Orario inizio/fine nel form assistenti
+
+**File modificati**: `app_assistenti.py`
+
+### Problema
+
+L'app assistenti calcolava i minuti notturni FCO usando un **fallback impreciso**: assumeva
+che tutti i minuti notturni ricadessero nel forfait (prime 2h30), con l'eccesso negli extra.
+In scenari con servizio misto giorno→notte (es.: 21:30-01:30) questo causava una **sovrastima
+di fino €2,08** nel compenso notturno.
+
+**Causa tecnica**: `calculate_tariffa_from_inputs()` chiamava `calcola_tariffa_collaboratore()`
+senza passare `inizio_dt` e `fine_dt`, attivando il percorso fallback in `_calcola_noturno_extra_fco`.
+
+**Esempio di errore (scenario misto 21:30-01:30 con 60 min extra)**:
+
+| | notte_forfait | notte_extra | totale_notte |
+|---|---|---|---|
+| Fallback (sbagliato) | 150 min | 0 min | **€11,20** |
+| Con timestamp (corretto) | 90 min | 60 min | **€9,12** |
+| **Differenza** | | | **-€2,08** |
+
+### Soluzione applicata
+
+1. **Nuovo form di compilazione turni** (expander per ogni turno) in `app_assistenti.py`:
+   - Campo `🕐 Orario inizio servizio` (`st.time_input`)
+   - Campo `🕐 Orario fine effettivo` (`st.time_input`)
+   - Campo `⏱️ Extra ritardo ATD (min)` (`st.number_input`)
+   - Gestione automatica del cambio giorno (es.: inizio 23:00, fine 01:30)
+   - Display anteprima: durata totale, min notturni, min extra
+   - Per FCO: mostra separazione **notte forfait / notte extra** in real-time
+   - Calcolo completo €base/extra/notte/totale con aggiornamento live
+   - Tasto **💾 Salva turno** → salva in JSON con tutti i campi (inclusi notte_forfait_min, notte_extra_min)
+
+2. **Firma estesa** di `calculate_tariffa_from_inputs()`:
+   - Aggiunti parametri `inizio_dt: Optional[datetime]` e `fine_dt: Optional[datetime]`
+   - Passati a `calcola_tariffa_collaboratore()` per abilitare il calcolo esatto
+
+3. **Calcolo notte esatto** via `_calcola_noturno_extra_fco()` con timestamp reali:
+   - Minuto per minuto, rispetta la fascia TO (SAND vs altri)
+   - Split preciso forfait/extra senza approssimazioni
+
+---
+
 ## [2026-03-30] Verifica e documentazione regole FCO — Calcolo compensi e maggiorazione notturna
 
 **File modificato**: `tariffe_collaboratori.py`

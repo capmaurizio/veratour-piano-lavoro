@@ -171,7 +171,9 @@ def calculate_tariffa_from_inputs(
     extra_min: int,
     notte_min: int,
     tour_operator: Optional[str] = None,
-    tipo_servizio: Optional[str] = None
+    tipo_servizio: Optional[str] = None,
+    inizio_dt: Optional[datetime] = None,   # orario inizio servizio (Timestamp)
+    fine_dt: Optional[datetime] = None,     # orario fine forfait (Timestamp)
 ) -> Dict[str, float]:
     """Calcola la tariffa basata sugli input dell'assistente"""
     
@@ -231,7 +233,9 @@ def calculate_tariffa_from_inputs(
         minuti_notturni=notte_min,
         is_festivo=is_festivo,
         tour_operator=tour_operator,
-        tipo_servizio=tipo_servizio
+        tipo_servizio=tipo_servizio,
+        inizio_dt=inizio_dt,   # passati per calcolo esatto notte FCO
+        fine_dt=fine_dt,       # senza questi viene usato il fallback
     )
     
     return tariffe
@@ -554,3 +558,216 @@ else:
             
             if not turni_display.empty:
                 st.dataframe(turni_display, use_container_width=True, hide_index=True)
+
+            # ═══════════════════════════════════════════════════════════════
+            # FORM DI INSERIMENTO DATI PER OGNI TURNO
+            # ═══════════════════════════════════════════════════════════════
+            st.markdown("---")
+            st.subheader("✏️ Compila i tuoi turni")
+            st.caption(
+                "Per ogni turno inserisci l'orario effettivo di inizio e fine servizio. "
+                "Il calcolo del compenso (incluso il notturno) avviene automaticamente."
+            )
+
+            for idx, row in turni.iterrows():
+                data_val  = parse_date_value(row.get('DATA', None))
+                apt_val   = str(row.get('APT', '')).strip().upper()
+                volo_val  = str(row.get('VOLO', '')).strip()
+                std_val   = parse_time_value(row.get('STD', None))
+                to_val    = str(row.get('TOUR OPERATOR', '')).strip()
+                serv_val  = str(row.get('SERVIZIO', row.get('ARRIVI/TRF', ''))).strip()
+
+                if not data_val:
+                    continue
+
+                data_key = data_val.strftime("%Y-%m-%d")
+
+                # Chiave univoca turno
+                chiavi_possibili = []
+                if volo_val and volo_val.lower() not in ['nan', 'none', '']:
+                    chiavi_possibili.append(f"{data_key}_{apt_val}_{volo_val.replace(' ', '_')}")
+                if std_val:
+                    chiavi_possibili.append(f"{data_key}_{apt_val}_{std_val.strftime('%H%M')}")
+                chiavi_possibili.append(f"{data_key}_{apt_val}")
+                chiave_primaria = chiavi_possibili[0]
+
+                # Carica dati salvati
+                dati_turno_saved = {}
+                for chiave in chiavi_possibili:
+                    if chiave in dati_salvati:
+                        dati_turno_saved = dati_salvati[chiave]
+                        break
+
+                compilato = bool(dati_turno_saved and 'orario_inizio' in dati_turno_saved)
+                label_stato = "✅" if compilato else "⏳"
+                volo_label  = f" — {volo_val}" if volo_val and volo_val.lower() not in ['nan', 'none', ''] else ""
+                to_label    = f" ({to_val})" if to_val and to_val.lower() not in ['nan', 'none', ''] else ""
+                exp_title   = f"{label_stato} {data_val.strftime('%d/%m/%Y')} — {apt_val}{volo_label}{to_label}"
+
+                with st.expander(exp_title, expanded=(not compilato)):
+                    col_info1, col_info2 = st.columns([1, 2])
+                    with col_info1:
+                        st.markdown(f"**Data:** {data_val.strftime('%A %d/%m/%Y')}")
+                        st.markdown(f"**Aeroporto:** {apt_val}")
+                        st.markdown(f"**Tour Operator:** {to_val if to_val else '—'}")
+                    with col_info2:
+                        if std_val:
+                            st.markdown(f"**STD (Convocazione):** {std_val.strftime('%H:%M')}")
+                        if volo_val and volo_val.lower() not in ['nan', 'none', '']:
+                            st.markdown(f"**Volo:** {volo_val}")
+                        if serv_val and serv_val.lower() not in ['nan', 'none', '']:
+                            st.markdown(f"**Servizio:** {serv_val}")
+
+                    st.markdown("---")
+
+                    # Valori di default dai dati salvati
+                    def _t(key, default_h=6, default_m=0):
+                        saved = dati_turno_saved.get(key)
+                        if saved:
+                            try:
+                                parts = str(saved).split(':')
+                                return time(int(parts[0]), int(parts[1]))
+                            except:
+                                pass
+                        return time(default_h, default_m)
+
+                    default_inizio = _t('orario_inizio', std_val.hour if std_val else 6, std_val.minute if std_val else 0)
+                    default_fine   = _t('orario_fine', (std_val.hour + 3) % 24 if std_val else 9, std_val.minute if std_val else 0)
+                    default_extra  = int(dati_turno_saved.get('extra_min', 0))
+
+                    form_key = chiave_primaria.replace('-', '').replace('_', '')
+
+                    col_t1, col_t2, col_t3 = st.columns([1, 1, 1])
+                    with col_t1:
+                        orario_inizio = st.time_input(
+                            "🕐 Orario inizio servizio",
+                            value=default_inizio,
+                            key=f"inizio_{form_key}_{idx}",
+                            help="Ora in cui hai iniziato l'assistenza"
+                        )
+                    with col_t2:
+                        orario_fine = st.time_input(
+                            "🕐 Orario fine effettivo",
+                            value=default_fine,
+                            key=f"fine_{form_key}_{idx}",
+                            help="Ora in cui il servizio si è concluso (incluso ritardo ATD)"
+                        )
+                    with col_t3:
+                        extra_ritardo = st.number_input(
+                            "⏱️ Extra ritardo ATD (min)",
+                            min_value=0, max_value=480,
+                            value=default_extra,
+                            key=f"extra_{form_key}_{idx}",
+                            help="Minuti aggiuntivi per ritardo aereo (oltre l'orario fine effettivo)"
+                        )
+
+                    # ── Calcolo automatico ───────────────────────────────────────
+                    # Costruisce i datetime completi
+                    # Gestisce il caso in cui la fine sia il giorno dopo (es. 01:30 > 23:00)
+                    inizio_naive = datetime.combine(data_val, orario_inizio)
+                    fine_naive   = datetime.combine(data_val, orario_fine)
+                    if fine_naive <= inizio_naive:
+                        from datetime import timedelta
+                        fine_naive = fine_naive + timedelta(days=1)
+
+                    durata_totale_min  = int((fine_naive - inizio_naive).total_seconds() / 60) + extra_ritardo
+                    durata_base_min    = 150  # 2h30 forfait FCO (per altri APT è diverso ma OK come default)
+                    durata_servizio_min = int((fine_naive - inizio_naive).total_seconds() / 60)
+
+                    # Converti in pandas Timestamp per passare alla funzione
+                    inizio_ts = pd.Timestamp(inizio_naive)
+                    # fine_ts è la fine del forfait (inizio + 2h30), o la fine reale se minore
+                    fine_forfait_ts = inizio_ts + pd.Timedelta(minutes=durata_base_min)
+                    if pd.Timestamp(fine_naive) < fine_forfait_ts:
+                        fine_forfait_ts = pd.Timestamp(fine_naive)
+
+                    # Calcola notte con metodo esatto (minuto per minuto) usando i timestamp
+                    is_sand_op = 'SAND' in to_val.upper() if to_val else False
+                    from tariffe_collaboratori import _calcola_noturno_extra_fco
+                    notte_base_min_calc, notte_extra_min_calc, _ = _calcola_noturno_extra_fco(
+                        inizio_dt=inizio_ts,
+                        fine_dt=fine_forfait_ts,
+                        extra_min_ritardo=float(extra_ritardo + max(0, durata_servizio_min - durata_base_min) * 60 / 60),
+                        durata_base_min=float(durata_base_min),
+                        minuti_notturni_fallb=0.0,
+                        is_sand=is_sand_op
+                    )
+                    notte_totale_min = int(notte_base_min_calc + notte_extra_min_calc)
+
+                    # Mostra anteprima calcolo
+                    st.markdown("**📊 Anteprima calcolo:**")
+                    col_r1, col_r2, col_r3, col_r4 = st.columns(4)
+                    ore_d  = durata_totale_min // 60
+                    min_d  = durata_totale_min % 60
+                    ore_n  = notte_totale_min  // 60
+                    min_n  = notte_totale_min  % 60
+                    col_r1.metric("⏱️ Durata totale",   f"{ore_d}h {min_d}m")
+                    col_r2.metric("🌙 Min. notturni",    f"{ore_n}h {min_n}m",
+                                  help=f"{int(notte_base_min_calc)} min. nel forfait + {int(notte_extra_min_calc)} min. negli extra")
+                    col_r3.metric("📋 Min. extra (tot)", f"{extra_ritardo + max(0, durata_servizio_min - durata_base_min)} min")
+
+                    if apt_val == 'FCO':
+                        col_r4.markdown(
+                            f"🔢 **Notte forfait**: {int(notte_base_min_calc)} min  \n"
+                            f"🔢 **Notte extra**:   {int(notte_extra_min_calc)} min",
+                        )
+
+                    # ── Calcolo tariffa completa ──────────────────────────────
+                    try:
+                        tariffe = calculate_tariffa_from_inputs(
+                            apt=apt_val,
+                            nome_assistente=nome_assistente,
+                            data_turno=data_val,
+                            std_time=std_val,
+                            durata_effettiva_min=durata_totale_min,
+                            extra_min=extra_ritardo + max(0, durata_servizio_min - durata_base_min),
+                            notte_min=notte_totale_min,
+                            tour_operator=to_val if to_val and to_val.lower() not in ['nan', 'none', ''] else None,
+                            tipo_servizio=serv_val if serv_val and serv_val.lower() not in ['nan', 'none', ''] else None,
+                            inizio_dt=inizio_ts,
+                            fine_dt=fine_forfait_ts,
+                        )
+
+                        if tariffe:
+                            col_e1, col_e2, col_e3, col_e4 = st.columns(4)
+                            col_e1.metric("🧾 Base",    f"€ {tariffe.get('base_eur', 0):.2f}")
+                            col_e2.metric("➕ Extra",   f"€ {tariffe.get('extra_eur', 0):.2f}")
+                            col_e3.metric("🌙 Notte",   f"€ {tariffe.get('notte_eur', 0):.2f}")
+                            col_e4.metric("💰 Totale",  f"€ {tariffe.get('totale_eur', 0):.2f}")
+                            errore_tl = tariffe.get('errore', '')
+                            if errore_tl:
+                                st.warning(errore_tl)
+                        else:
+                            st.info("ℹ️ Tariffa non disponibile per questo aeroporto/tipo servizio.")
+                            tariffe = {}
+                    except Exception as e:
+                        st.error(f"Errore calcolo tariffa: {e}")
+                        tariffe = {}
+
+                    # ── Tasto Salva ─────────────────────────────────────────
+                    if st.button("💾 Salva turno", key=f"salva_{form_key}_{idx}", type="primary"):
+                        dati_da_salvare = dati_salvati.copy()
+                        dati_da_salvare[chiave_primaria] = {
+                            'orario_inizio':     orario_inizio.strftime('%H:%M'),
+                            'orario_fine':       orario_fine.strftime('%H:%M'),
+                            'extra_min':         int(extra_ritardo + max(0, durata_servizio_min - durata_base_min)),
+                            'extra_ritardo_min': int(extra_ritardo),
+                            'notte_min':         int(notte_totale_min),
+                            'notte_forfait_min': int(notte_base_min_calc),
+                            'notte_extra_min':   int(notte_extra_min_calc),
+                            'durata_effettiva_h': round(durata_totale_min / 60, 4),
+                            'apt':               apt_val,
+                            'tour_operator':     to_val,
+                            'data':              data_key,
+                            'volo':              volo_val,
+                            'base_eur':          tariffe.get('base_eur', 0),
+                            'extra_eur':         tariffe.get('extra_eur', 0),
+                            'notte_eur':         tariffe.get('notte_eur', 0),
+                            'totale_eur':        tariffe.get('totale_eur', 0),
+                        }
+                        if save_assistente_data(nome_assistente, dati_da_salvare):
+                            st.success("✅ Turno salvato!")
+                            dati_salvati = dati_da_salvare  # aggiorna locale
+                            st.rerun()
+                        else:
+                            st.error("❌ Errore nel salvataggio")
