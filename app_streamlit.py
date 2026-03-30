@@ -8,6 +8,8 @@ Single-section layout: Upload → Detect → Calculate → Results
 import streamlit as st
 import os
 import tempfile
+import pandas as pd
+import re
 
 from ui_styles import (
     inject_styles, render_top_bar, render_footer,
@@ -128,6 +130,84 @@ with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp_file:
     tmp_path = tmp_file.name
 st.session_state['tmp_file_path'] = tmp_path
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Validazione struttura file (mostra avvisi prima dell'elaborazione)
+# ═══════════════════════════════════════════════════════════════════════════════
+def validate_file_structure(file_path: str) -> list:
+    """
+    Controlla che il file Excel abbia la struttura attesa.
+    Restituisce lista di dict con: tipo ('error'/'warn'/'ok'), messaggio.
+    """
+    issues = []
+    required_cols = ['DATA', 'APT', 'TURNO', 'STD', 'ATD', 'TOUR OPERATOR']
+    alt_names = {
+        'DATA': ['DATA', 'H', 'DATA VOLO', 'DATA/ORA'],
+        'APT':  ['APT', 'AEROPORTO', 'AIRPORT'],
+        'TURNO': ['TURNO', 'NOTE E TURNI', 'TURNI'],
+        'STD':  ['STD', 'CONV.NE', 'CONVOCAZIONE', 'STD (ORA DEP)'],
+        'ATD':  ['ATD', 'ATD REALE', 'PARTENZA REALE'],
+        'TOUR OPERATOR': ['TOUR OPERATOR', 'OPERATORE', 'TO'],
+    }
+    try:
+        xls = pd.ExcelFile(file_path)
+        sheet_names = xls.sheet_names
+
+        # 1. Controllo foglio PIANO VOLI
+        piano_voli_found = any(s.upper().strip() == 'PIANO VOLI' for s in sheet_names)
+        if not piano_voli_found:
+            issues.append({
+                'tipo': 'warn',
+                'msg': f'⚠️ Foglio **"PIANO VOLI"** non trovato. '
+                       f'Fogli presenti: **{" | ".join(sheet_names)}**. '
+                       f'Il sistema userà il primo foglio disponibile.'
+            })
+            # Usa il primo foglio non vuoto
+            target_sheet = sheet_names[0]
+        else:
+            target_sheet = next(s for s in sheet_names if s.upper().strip() == 'PIANO VOLI')
+            issues.append({'tipo': 'ok', 'msg': f'✅ Foglio **"{target_sheet}"** trovato.'})
+
+        # 2. Leggi il foglio e controlla le colonne
+        df = pd.read_excel(file_path, sheet_name=target_sheet, nrows=5)
+        df.columns = [str(c).strip().upper() for c in df.columns]
+        found_cols = set(df.columns)
+
+        for campo, possibili in alt_names.items():
+            found_match = next((p for p in possibili if p.upper() in found_cols), None)
+            if found_match:
+                if found_match.upper() != campo:  # trovato ma con nome alternativo
+                    issues.append({
+                        'tipo': 'warn',
+                        'msg': f'⚠️ Colonna **"{campo}"** non trovata — '
+                               f'rilevata come **"{found_match}"** (potrebbe causare problemi).'
+                    })
+                # else tutto ok, non serve mostrare ogni OK
+            else:
+                issues.append({
+                    'tipo': 'error',
+                    'msg': f'❌ Colonna **"{campo}"** mancante. '
+                           f'Attesa una di: {", ".join(possibili)}'
+                })
+
+        # 3. Controlla righe dati
+        df_full = pd.read_excel(file_path, sheet_name=target_sheet)
+        df_full.columns = [str(c).strip().upper() for c in df_full.columns]
+        n_rows = len(df_full.dropna(how='all'))
+        if n_rows == 0:
+            issues.append({'tipo': 'error', 'msg': '❌ Il foglio non contiene dati.'})
+        else:
+            issues.append({'tipo': 'ok', 'msg': f'✅ **{n_rows}** righe dati trovate nel foglio.'})
+
+    except Exception as e:
+        issues.append({'tipo': 'error', 'msg': f'❌ Errore nella lettura del file: {str(e)}'})
+
+    return issues
+
+
+file_issues = validate_file_structure(tmp_path)
+has_errors = any(i['tipo'] == 'error' for i in file_issues)
+has_warnings = any(i['tipo'] == 'warn' for i in file_issues)
+
 # Detect tour operators
 tour_operators, aliservice_managed = detect_tour_operators(tmp_path)
 
@@ -221,6 +301,27 @@ else:
     # STEP 1-2: Detected TOs — show status lines + calculate button
     # ═════════════════════════════════════════════════════════════════════════
     render_stepper(2)  # at elaboration step
+
+    # ── Diagnostica struttura file ──────────────────────────────────────────
+    if has_errors or has_warnings:
+        with st.expander(
+            f"{'🔴 Problemi struttura file' if has_errors else '🟡 Avvisi struttura file'} — clicca per dettagli",
+            expanded=True
+        ):
+            for issue in file_issues:
+                if issue['tipo'] == 'error':
+                    st.error(issue['msg'])
+                elif issue['tipo'] == 'warn':
+                    st.warning(issue['msg'])
+                # ok: non mostrare, troppo verboso
+            if has_errors:
+                st.info(
+                    "💡 **Come risolvere**: Assicurati che il file Excel contenga un foglio "
+                    "chiamato esattamente **PIANO VOLI** con le colonne standard "
+                    "(DATA, APT, TOUR OPERATOR, TURNO, STD, ATD). "
+                    "Puoi comunque tentare l'elaborazione ma il risultato potrebbe essere vuoto."
+                )
+    # ───────────────────────────────────────────────────────────────────────
 
     if all_tour_operators:
         render_status_line("●", f"Rilevati: {', '.join(sorted(all_tour_operators))}", "info")
