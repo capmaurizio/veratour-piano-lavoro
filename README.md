@@ -349,6 +349,64 @@ L'applicazione è deployata su **Streamlit Cloud**:
 - **Repository**: https://github.com/capmaurizio/veratour-piano-lavoro
 - **Auto-deploy**: Ogni push su GitHub aggiorna automaticamente l'app
 
+## 👤 App Assistenti (`app_assistenti.py`)
+
+App separata per gli assistenti (porta `:8502`), avviabile con `./avvia_assistenti.sh` o
+`streamlit run app_assistenti.py --server.port 8502`.
+
+### Funzionalità
+- **Login** con nome assistente + password (default: `12345`)
+- **Caricamento piano lavoro** — filtra automaticamente i turni dell'assistente
+- **Tabella riepilogativa** — mostra tutti i turni con stato compilazione (⏳/✅)
+- **Form di compilazione turni** — per ogni turno un expander con:
+  - `🕐 Orario inizio servizio` e `🕐 Orario fine effettivo` (time picker)
+  - `⏱️ Extra ritardo ATD` in minuti
+  - Gestione automatica cambio giorno (es. inizio 23:00, fine 01:30 → +1 giorno)
+  - **Anteprima calcolo in real-time**: durata, min notturni, min extra
+  - Per **FCO**: visualizzazione split notte-forfait / notte-extra (Regola B)
+  - Compenso calcolato live: €base + €extra + €notte = **totale**
+  - `💾 Salva turno` → persiste in JSON
+- **Download template Excel** personalizzato con i dati del piano lavoro
+
+### Calcolo Notturno FCO — Regola B
+
+Il calcolo del notturno FCO usa la funzione `_calcola_noturno_extra_fco()` con i timestamp
+reali di inizio e fine servizio, garantendo il **split esatto** tra minuti notturni nel forfait
+e minuti notturni nelle ore extra:
+
+| Fascia | TO | Maggiorazione |
+|--------|----|--------------|
+| 23:00 – 06:00 | Baobab/TH/Domina/Rusconi/Micheltours | +20% |
+| 23:00 – 03:30 | SAND | +20% |
+
+Formule (Regola B — doc. ufficiale FCO 2026):
+- **Notte forfait**: €22,40/h × 20% = **€4,48/h**
+- **Notte extra**: €12,00/h × 20% = **€2,40/h** (solo maggiorazione, base già in Extra €)
+
+### Dati salvati per turno (JSON)
+```json
+{
+  "2026-02-01_FCO_NO7928": {
+    "orario_inizio":     "03:10",
+    "orario_fine":       "05:40",
+    "extra_ritardo_min": 53,
+    "extra_min":         53,
+    "notte_min":         170,
+    "notte_forfait_min": 150,
+    "notte_extra_min":   20,
+    "durata_effettiva_h": 3.383,
+    "apt":               "FCO",
+    "tour_operator":     "BAOBAB",
+    "base_eur":          56.00,
+    "extra_eur":         10.60,
+    "notte_eur":         12.00,
+    "totale_eur":        78.60
+  }
+}
+```
+
+---
+
 ## 🛠️ Tecnologie
 
 - **Python 3.10+**
@@ -397,7 +455,13 @@ Prima di eseguire l'elaborazione, il sistema controlla automaticamente la strutt
 - In caso di errori critici viene mostrato un suggerimento su come correggere il file sorgente
 - L'elaborazione può essere comunque tentata ma il risultato potrebbe essere incompleto
 
+### Calcolo Notturno FCO — Fix Fallback
+Il calcolo del notturno per i collaboratori FCO usa `_calcola_noturno_extra_fco()` con
+split minuto-per-minuto tra fascia forfait (2h30) e fascia extra. L'app assistenti passa
+esplicitamente `inizio_dt` e `fine_dt` per evitare il fallback impreciso che poteva
+sovrastimare fino a €2,08 in scenari misti giorno→notte.
+
 ---
 
-**Ultimo aggiornamento**: Marzo 2026  
-**Versione**: 2.2 - Multi-Tour Operatour con Diagnostica Struttura File
+**Ultimo aggiornamento**: Marzo 2026
+**Versione**: 2.3 - Multi-Tour Operatour + App Assistenti con Form Turni Completo

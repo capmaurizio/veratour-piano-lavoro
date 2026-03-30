@@ -154,6 +154,61 @@ Excel upload
 
 ---
 
+## 👤 App Assistenti (`app_assistenti.py`)
+
+App Streamlit separata avviata sulla porta `:8502`. Permette agli assistenti di
+consultare i propri turni e compilare gli orari effettivi per il calcolo automatico del compenso.
+
+### Flusso
+```
+Login → Carica Piano Lavoro → Tabella turni → Form compilazione → Salva JSON
+```
+
+### Componenti
+| Componente | Descrizione |
+|-----------|-------------|
+| **Login** | Nome assistente + password (`12345`) |
+| **File uploader** | Carica il piano lavoro, filtra i turni dell'assistente |
+| **Tabella riepilogativa** | Tutti i turni con stato ⏳/✅ e ore prestate |
+| **Form turni** (expander) | Un expander per ogni turno con campi orario |
+| **Download template** | Excel personalizzato con dati piano lavoro |
+
+### Form di compilazione turno (nuovo — v2.3)
+
+Ogni turno ha un expander che mostra:
+1. **Info turno** dal piano lavoro (data, APT, volo, TO, STD)
+2. **Campi inserimento**:
+   - `🕐 Orario inizio servizio` — default = STD dal piano lavoro
+   - `🕐 Orario fine effettivo` — gestisce cambio giorno automatico
+   - `⏱️ Extra ritardo ATD (min)`
+3. **Anteprima calcolo** (live, aggiornato ad ogni modifica):
+   - Durata totale, Min notturni, Min extra
+   - Per FCO: split **notte forfait** / **notte extra** (Regola B)
+4. **Compenso**: €base + €extra + €notte = totale
+5. **Salva** → JSON in `dati_assistenti/<NOME>.json`
+
+### Data model JSON (per turno)
+```json
+{
+  "orario_inizio":     "03:10",
+  "orario_fine":       "05:40",
+  "extra_ritardo_min": 53,
+  "extra_min":         53,
+  "notte_min":         170,
+  "notte_forfait_min": 150,
+  "notte_extra_min":   20,
+  "durata_effettiva_h": 3.383,
+  "apt": "FCO",  "tour_operator": "BAOBAB",
+  "base_eur": 56.0,  "extra_eur": 10.6,  "notte_eur": 12.0,  "totale_eur": 78.6
+}
+```
+
+### Fix calcolo notturno FCO (v2.3)
+Il form passa `inizio_dt` e `fine_dt` reali a `calcola_tariffa_collaboratore()`,
+evitando il fallback che poteva sovrastimare di €2,08 in scenari misto giorno→notte.
+
+---
+
 ## 🚀 Deploy
 
 | Voce | Dettaglio |
@@ -205,6 +260,19 @@ Excel upload
 5. Aggiungi mapping in `get_tour_operator_module_name()` se necessario
 
 > Il sistema rileverà automaticamente il nuovo TO se presente nel file Excel caricato.
+
+---
+
+## 📅 Versioni
+
+| Versione | Data | Novità principali |
+|---------|------|-------------------|
+| **1.0** | 2025-09 | Sistema mono-TO Veratour |
+| **2.0** | 2026-01 | Multi-TO, rilevamento dinamico |
+| **2.1** | 2026-02 | Refactoring tariffe FCO/NAP, fix notturno |
+| **2.2** | 2026-03-30 | Diagnostica struttura file Excel a video |
+| **2.3** | 2026-03-30 | Form turni assistenti + fix notturno FCO esatto |
+
 
 ---
 
