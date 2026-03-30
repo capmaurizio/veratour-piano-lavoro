@@ -4,6 +4,51 @@ Questo file documenta le correzioni e le modifiche significative apportate al si
 
 ---
 
+## [2026-03-30] Verifica e documentazione regole FCO — Calcolo compensi e maggiorazione notturna
+
+**File modificato**: `tariffe_collaboratori.py`
+
+### Verifica regole ufficiali
+
+Ricevuto documento ufficiale **"Calcolo compensi e maggiorazione notturna - FCO"**.
+Effettuata verifica completa della corrispondenza tra regole e codice.
+
+**Risultato: implementazione già conforme alle regole ufficiali** ✅
+
+| Voce | Regola ufficiale | Codice | Verifica |
+|------|-----------------|--------|----------|
+| Forfait base | €56,00 / 2h30' | `base_eur=56.0, durata_base_h=2.5` | ✅ |
+| Tariffa oraria forfait | €22,40/h (=56/2.5) | `val_orario_base = base / durata_base_h` | ✅ |
+| Tariffa extra | €12,00/h | `extra_eur_per_h = 12.0` | ✅ |
+| Magg. notturna | +20% | `notturno_perc = 0.20` | ✅ |
+| Notte forfait | €22,40 × 20% = €4,48/h | `val_orario_base × (min/60) × 0.20` | ✅ |
+| Notte extra | €12,00 × 20% = €2,40/h | `extra_eur_per_h × (min/60) × 0.20` | ✅ |
+| Fascia SAND | 23:00-03:30 | `h==3 and curr.minute < 30` | ✅ |
+| Fascia altri TO | 23:00-06:00 | `h==23 or (0<=h<6)` | ✅ |
+| Festivo FCO | +20% + 29/6 incluso | `festivo_perc=0.20 + get_fco_holidays()` | ✅ |
+
+### Esempio ufficiale verificato (test automatico)
+
+```
+Caso: 01/02/2026 — Baobab/TH — turno 03:10-06:33
+  Forfait:          03:10 → 05:40  (2h30)
+  Extra:            05:40 → 06:33  (53 min)
+  Notturno forfait: 03:10 → 06:00  → 150 min nel forfait → €11,20
+  Notturno extra:   05:40 → 06:00  → 20 min negli extra  → €0,80
+  Extra (53 min):   53/60 × €12    → €10,60
+  TOTALE:           56,00 + 10,60 + 12,00 = €78,60 ✅
+```
+
+### Modifiche effettate al codice
+
+Solo aggiornamento commenti/documentazione interna — **nessuna modifica alla logica di calcolo**:
+
+- Aggiunta docstring completa a `_calcola_noturno_extra_fco()` con riferimento alla Regola B
+- Commenti allineati alla terminologia ufficiale (forfait/extra, €22.40/h, €4.48/h, €2.40/h)
+- Aggiunto commento con esempio numerico nel blocco FCO Standard (riga ~1418)
+
+---
+
 ## [2026-03-30] Diagnostica struttura file Excel — Avvisi a video prima dell'elaborazione
 
 **File modificato**: `app_streamlit.py`  

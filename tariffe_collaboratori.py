@@ -555,17 +555,36 @@ def _calcola_noturno_extra_fco(
     minuti_notturni_fallb: float,
     is_sand: bool
 ) -> Tuple[float, float, str]:
+    """
+    Calcola i minuti notturni scindendo forfait ed extra — Regola B (doc. ufficiale FCO 2026).
+
+    FASCIA NOTTURNA:
+      - Baobab/TH/Domina/Rusconi/Micheltours: 23:00-06:00
+      - SAND: 23:00-03:30
+
+    PRINCIPIO (Regola B):
+      Il forfait copre ESCLUSIVAMENTE le prime 2h30 (durata_base_min).
+      Tutto il tempo successivo è extra, anche se ricade in fascia notturna.
+      La maggiorazione notturna si applica separatamente:
+        - Minuti notturni nel forfait  → tariffa oraria forfait (€22.40/h) × 20% = €4.48/h
+        - Minuti notturni negli extra  → tariffa oraria extra  (€12.00/h) × 20% = €2.40/h
+      La quota base degli extra notturni è GIÀ INCLUSA negli Extra (€): si aggiunge SOLO la maggiorazione.
+
+    Returns:
+      (notte_forfait_min, notte_extra_min, errore_str)
+    """
     if pd.isna(inizio_dt) or pd.isna(fine_dt) or inizio_dt is None or fine_dt is None:
         return min(minuti_notturni_fallb, durata_base_min), max(0, minuti_notturni_fallb - durata_base_min), "⚠️ ERRORE TIMELINE DATI MANCANTI (Calcolo Notturno Esatto Impossibile)"
 
     notte_forfait = 0.0
     notte_extra = 0.0
-    
+
     t_start = inizio_dt
     t_end_with_extra = fine_dt + pd.Timedelta(minutes=extra_min_ritardo)
-    t_forfait_end = t_start + pd.Timedelta(minutes=durata_base_min)
-    
+    t_forfait_end = t_start + pd.Timedelta(minutes=durata_base_min)  # inizio + 2h30
+
     if t_end_with_extra < t_forfait_end:
+        # Il servizio finisce prima del termine del forfait (nessun extra)
         t_forfait_end = t_end_with_extra
 
     curr = t_start
@@ -573,20 +592,22 @@ def _calcola_noturno_extra_fco(
         h = curr.hour
         is_night = False
         if is_sand:
+            # SAND: 23:00-03:30
             if h == 23 or (0 <= h < 3) or (h == 3 and curr.minute < 30):
                 is_night = True
         else:
+            # Baobab/TH/Domina/Rusconi/Micheltours: 23:00-06:00
             if h == 23 or (0 <= h < 6):
                 is_night = True
-        
+
         if is_night:
             if curr < t_forfait_end:
-                notte_forfait += 1
+                notte_forfait += 1   # minuto notturno nella finestra forfait (2h30)
             else:
-                notte_extra += 1
-                
+                notte_extra += 1     # minuto notturno nelle ore extra (oltre le 2h30)
+
         curr += pd.Timedelta(minutes=1)
-        
+
     return notte_forfait, notte_extra, ""
 
 def calcola_tariffa_collaboratore(
@@ -1416,40 +1437,45 @@ def calcola_tariffa_collaboratore(
         }
     
     # 7. FCO - Tariffe Standard Partenze (Accordo Assistenti FCO 2026)
-    # Assistenza base: €56,00 + IVA per 2h30'
-    # Ore extra: €12,00 + IVA all'ora
-    # Notturno: +20% con fascia TO-specifica:
-    #   - SAND: 23:00-03:30
-    #   - Baobab/TH/Domina/Rusconi/Micheltours: 23:00-06:00
-    # Festivo: +20% (include 29/6 Santi Pietro e Paolo)
+    # ─────────────────────────────────────────────────────────────────
+    # Forfait base:  €56,00 / 2h30'  →  tariffa oraria €22,40/h
+    # Ore extra:     €12,00/h (tempo oltre le 2h30 — la base NON si estende)
+    # Notturno (Regola B — doc. ufficiale FCO 2026):
+    #   Fascia SAND:                 23:00-03:30
+    #   Fascia Baobab/TH/Dom/Rus/MT: 23:00-06:00
+    #   Maggiorazione +20%:
+    #     Forfait notturno: €22,40/h × 20% = €4,48/h
+    #     Extra notturno:   €12,00/h × 20% = €2,40/h  (solo la magg., la base è già in Extra €)
+    # Festivo: +20% su tutto (include 29/6 Santi Pietro e Paolo)
+    # Esempio doc: 03:10-06:33 Baobab → notte_forfait=150min(€11,20) + notte_extra=20min(€0,80)
+    #              Extra 53min=€10,60 → Totale €78,60
     if apt_upper == 'FCO' and (tipo_servizio is None or tipo_servizio == '' or tipo_servizio == 'standard'):
-        base_eur = 56.0
-        durata_base_h = 2.5
-        extra_eur_per_h = 12.0
-        notturno_perc = 0.20  # +20% per FCO (Accordo 2026)
-        festivo_perc = 0.20  # +20% per festivi
-        
+        base_eur       = 56.0   # €56,00 forfait 2h30'
+        durata_base_h  = 2.5    # 2 ore e 30 minuti
+        extra_eur_per_h = 12.0  # €12,00/h per ore oltre le 2h30
+        notturno_perc  = 0.20   # +20%
+        festivo_perc   = 0.20   # +20%
+
         durata_h = durata_min / 60.0
-        base = base_eur
-        
-        # Calcola extra
+        base = base_eur  # forfait fisso, indipendente dalla durata effettiva
+
+        # Extra = ore oltre le 2h30 × €12/h + minuti ritardo ATD × €12/h
         ore_extra_base = max(0, durata_h - durata_base_h)
         extra_ore_oltre_base = ore_extra_base * extra_eur_per_h
-        if extra_min > 0:
-            extra_minuti_ritardo = (extra_min / 60.0) * extra_eur_per_h
-        else:
-            extra_minuti_ritardo = 0.0
+        extra_minuti_ritardo = (extra_min / 60.0) * extra_eur_per_h if extra_min > 0 else 0.0
         extra = extra_ore_oltre_base + extra_minuti_ritardo
-        
-        # Calcola notturno FCO Splittato
+
+        # Notturno splittato (Regola B): distingue minuti notturni nel forfait vs negli extra
         is_sand_op = 'SAND' in str(tour_operator).upper().strip() if tour_operator else False
         notte_base_min, notte_extra_min, errore_tl = _calcola_noturno_extra_fco(
             inizio_dt, fine_dt, extra_min, durata_base_h * 60.0, minuti_notturni, is_sand_op
         )
-        
-        val_orario_base = base / durata_base_h if durata_base_h > 0 else 0.0
-        notte_forfait_eur = val_orario_base * (notte_base_min / 60.0) * notturno_perc
-        notte_extra_eur = extra_eur_per_h * (notte_extra_min / 60.0) * notturno_perc
+
+        # Maggiorazione notturna forfait: €22,40/h × 20% = €4,48/h
+        val_orario_base  = base / durata_base_h if durata_base_h > 0 else 0.0  # = 22.40
+        notte_forfait_eur = val_orario_base * (notte_base_min / 60.0) * notturno_perc    # €4,48/h
+        # Maggiorazione notturna extra: €12,00/h × 20% = €2,40/h (solo la magg.)
+        notte_extra_eur   = extra_eur_per_h * (notte_extra_min / 60.0) * notturno_perc   # €2,40/h
         notte = notte_forfait_eur + notte_extra_eur
         
         # Verifica festivo con festività FCO (include 29/6)
