@@ -535,6 +535,14 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
             turno_col = cols["turno"]
             sdf["__turno_raw"] = sdf[turno_col].astype(str)
             ffill_src = sdf[turno_col].replace("", np.nan)
+
+            # ──────────────────────────────────────────────────────────────────
+            # FIX: salva PRIMA del ffill quali righe NON hanno turno originale.
+            # Il forward-fill popola __turno_ffill anche per queste righe,
+            # ma dobbiamo trattarle separatamente (usa CONV.NE come inizio).
+            # ──────────────────────────────────────────────────────────────────
+            sdf["__turno_originale_mancante"] = ffill_src.isna()
+
             sdf["__turno_ffill"] = ffill_src.ffill()
 
             # Parse turno
@@ -571,27 +579,41 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
             convocazione_col = cols["convocazione"]
             fine_turno_col = cols["fine_turno"]
 
-            # Gestisci caso turno mancante: inizio = convocazione - 15 min, fine = inizio + 3h
+            # ──────────────────────────────────────────────────────────────────
+            # Gestisci righe senza turno originale: usa CONV.NE come inizio.
+            # Per queste righe il forward-fill ha portato il turno precedente,
+            # ma quello è sbagliato: il blocco deve partire dall'orario di
+            # convocazione (non dal turno di un'altra assistente/volo).
+            # Logica:
+            #   inizio = CONV.NE (es. 17:40)
+            #   fine_base = inizio + 3h  (base forfettaria)
+            #   fine effettiva -> sarà ATD (gestita dopo nell'aggregazione)
+            #   turno_norm viene resettato a "CONV_<HH:MM>" per evitare
+            #   che questa riga finisca aggregata col blocco del ffill.
+            # ──────────────────────────────────────────────────────────────────
             if convocazione_col:
                 sdf["__convocazione"] = sdf[convocazione_col].apply(parse_time_value)
-                # Se turno manca, calcola da convocazione
-                mask_no_turno = sdf["__start_str"].isna()
-                if mask_no_turno.any():
-                    for idx in sdf[mask_no_turno].index:
+                # Righe originalmente senza turno
+                mask_no_turno_orig = sdf["__turno_originale_mancante"]
+                if mask_no_turno_orig.any():
+                    for idx in sdf[mask_no_turno_orig].index:
                         conv = sdf.loc[idx, "__convocazione"]
                         if conv:
                             hh, mm = conv
-                            # Inizio = convocazione - 15 min
-                            conv_dt = to_dt(sdf.loc[idx, "__date"], f"{hh:02d}:{mm:02d}")
-                            start_dt = conv_dt - pd.Timedelta(minutes=15)
-                            # Fine = inizio + 3h
+                            # Inizio = CONV.NE (già l'orario esatto di convocazione)
+                            start_dt = to_dt(sdf.loc[idx, "__date"], f"{hh:02d}:{mm:02d}")
+                            # Fine base = inizio + 3h (verrà poi aggiornata con ATD)
                             end_dt = start_dt + pd.Timedelta(hours=cfg.durata_base_ore)
                             sdf.loc[idx, "__start_dt"] = start_dt
                             sdf.loc[idx, "__end_dt"] = end_dt
                             sdf.loc[idx, "__start_str"] = start_dt.strftime("%H:%M")
                             sdf.loc[idx, "__end_str"] = end_dt.strftime("%H:%M")
-                            sdf.loc[idx, "__turno_norm"] = f"{sdf.loc[idx, '__start_str']}-{sdf.loc[idx, '__end_str']}"
-                            sdf.loc[idx, "__durata_min"] = int((end_dt - start_dt).total_seconds() / 60)
+                            # Chiave univoca basata su CONV.NE, non sul turno forward-fillato
+                            sdf.loc[idx, "__turno_norm"] = f"{start_dt.strftime('%H:%M')}-{end_dt.strftime('%H:%M')}"
+                            sdf.loc[idx, "__turno_ffill"] = sdf.loc[idx, "__turno_norm"]
+                            sdf.loc[idx, "__durata_min"] = int(
+                                (end_dt - start_dt).total_seconds() / 60
+                            )
 
             # Iterate rows and aggregate by block
             for idx, r in sdf.iterrows():
