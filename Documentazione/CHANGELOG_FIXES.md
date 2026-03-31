@@ -4,6 +4,76 @@ Questo file documenta le correzioni e le modifiche significative apportate al si
 
 ---
 
+## [2026-03-31] Fix Aliservice — Forward-fill TURNO errato per righe senza orario (M&G)
+
+**File modificato**: `Aliservice/consuntivoaliservice.py`  
+**Commit**: `0b5c3d7`
+
+### Problema riscontrato
+
+Le righe Aliservice **senza TURNO esplicito** (es. servizi M&G con solo CONV.NE e STD/ATD)
+venivano aggregate al blocco sbagliato tramite forward-fill, ereditando l'orario di inizio
+della riga precedente. Questo causava un calcolo degli extra completamente errato.
+
+**Caso concreto** — riga del 11/02/2026, BGY, 3D GROUP, M&G:
+
+| Campo | Valore nel file |
+|-------|----------------|
+| DATA | 11/02/2026 |
+| CONV.NE | 17:40 |
+| TURNO | *(vuoto)* |
+| STD | 18:10 |
+| ATD | 18:30 |
+| ARRIVI/TRF | M&G |
+
+**Risultato ERRATO (prima del fix):**
+
+| Campo | Valore errato | Perché |
+|-------|--------------|--------|
+| TURNO_NORMALIZZATO | `07:30-13:00` | Forward-fill dalla riga ALL sopra |
+| INIZIO | `07:30` | Preso dal turno fwd-fillato |
+| FINE | `18:30` | ATD corretto |
+| EXTRA_MIN | **480 min = 8 ore** ❌ | `18:30 − (07:30+3h) = 18:30−10:30` |
+| TOTALE | **€185,00** ❌ | `€65 base + €120 extra` |
+
+**Risultato CORRETTO (dopo il fix):**
+
+| Campo | Valore corretto | Perché |
+|-------|----------------|--------|
+| TURNO_NORMALIZZATO | `17:40-20:40` | Da CONV.NE=17:40 |
+| INIZIO | `17:40` | CONV.NE ✅ |
+| FINE | `18:30` | ATD ✅ |
+| EXTRA_MIN | **0 min** ✅ | ATD 18:30 < fine_base 20:40 |
+| TOTALE | **€65,00** ✅ | Solo tariffa M&G base |
+
+### Causa tecnica
+
+Il forward-fill del TURNO (riga `sdf["__turno_ffill"] = ffill_src.ffill()`) veniva eseguito
+**prima** del blocco di controllo `mask_no_turno`. Di conseguenza, `__start_str` risultava
+già valorizzato con l'orario della riga precedente, rendendo la maschera `mask_no_turno`
+sempre `False` e impedendo l'attivazione della logica di fallback su CONV.NE.
+
+### Soluzione applicata
+
+1. **Flag pre-ffill**: aggiunto `sdf["__turno_originale_mancante"] = ffill_src.isna()`
+   **prima** del forward-fill, in modo da sapere quali righe non avevano turno originale.
+
+2. **Logica corretta per righe senza turno**: per quelle righe si usa `CONV.NE` come
+   orario di inizio (non `CONV.NE - 15min` come in precedenza, ma direttamente CONV.NE).
+
+3. **Chiave blocco univoca**: `__turno_norm` viene resettato a `"HH:MM-HH:MM"` basato su
+   CONV.NE, evitando che la riga venga erroneamente aggregata al blocco del forward-fill.
+
+4. **Fine effettiva**: rimane gestita correttamente dall'ATD nell'aggregazione successiva.
+
+### Impatto
+
+- ✅ Tutte le righe Aliservice senza TURNO (M&G, etc.) ora calcolano correttamente
+- ✅ Le righe con TURNO esplicito non sono impattate
+- ✅ Il forward-fill continua a funzionare per le righe che ne hanno legittimamente bisogno
+
+---
+
 ## [2026-03-30] Fix calcolo notturno FCO — Orario inizio/fine nel form assistenti
 
 **File modificati**: `app_assistenti.py`
