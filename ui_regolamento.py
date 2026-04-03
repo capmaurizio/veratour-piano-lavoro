@@ -250,7 +250,21 @@ def render_regolamento_page():
 
         st.subheader("Venezia (VCE) / Treviso (TSF) / Altri (es. CAG)")
         st.markdown("""
-        * Le logiche specifiche di questi aeroporti sono interamente **gestite in via dinamica tramite il listino prezzi**.
-        * I limiti orari e i tetti per il calcolo non presentano blocchi forfettari cablati o stringenti in applicazione, si adeguano a quanto depositato in \`tariffe_collaboratori.xlsx\` (Foglio Regole/Collaboratori).
+        * **Turno base:** Valore di riferimento del listino impostato a **€ 58,00 lorde** per 3 ore.
+        * **Extra:** Valutati sugli sforamenti o ritardi a **€ 12,00 lordi/h**.
+        * **Notturno e Festivo:** Si applicano le consuete regole di maggiorazione generale: +15% per le ore notturne, e maggiorazione fissa a corpo del **+20%** nei giorni festivi.
+        * Le logiche specifiche di questi aeroporti sono comunque modulabili dinamicamente depositando configurazioni contrattuali personali in \`tariffe_collaboratori.xlsx\` (Foglio Regole/Collaboratori).
+        
+        > **💡 Esempio VCE (Feriale)**: Turno diurno feriale di 4 ore.
+        > * Base 3h: **€ 58,00**
+        > * Extra 1h: **€ 12,00**
+        > * **Totale: € 70,00 lordi**.
         """)
+        
+        with st.expander("🍎 Spiegazione Semplice (per i non addetti ai lavori)"):
+            st.markdown("""
+            A Venezia (o negli altri aeroporti non citati sopra) si usa il "listino prezzi standard" nazionale di SCAY. 
+            Il fruttivendolo ha una normalissima cesta di 3 mele a **58 €**. Se gli chiedi un'altra mela, l'aggiunge al conto per 12 €. Niente blocchi obbligatori enormi o regole strane. C'è solo il rincaro notturno standard del 15% sul buio, o il 20% aggiuntivo se è il giorno di Natale!
+            """)
+
 
