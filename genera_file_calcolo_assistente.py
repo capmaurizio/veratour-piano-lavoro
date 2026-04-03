@@ -150,10 +150,17 @@ def calcola_tariffa_turno(
     # REGOLE STANDARD per altri aeroporti
     else:
         # Valori di default - MODIFICARE secondo tariffe specifiche
-        base_eur = 58.0
+        if apt_upper in ['CTA', 'PMO', 'PSA']:
+            base_eur = 60.0
+        elif apt_upper in ['BRI', 'BLQ']:
+            base_eur = 53.0
+        else:
+            base_eur = 58.0
+        
         durata_base_h = 3.0
         extra_eur_per_h = 12.0
-        notturno_perc = 0.15 if apt_upper == 'NAP' else 0.20
+        # Notturno default per tutti gli altri è +15% (FCO è già gestito sopra)
+        notturno_perc = 0.15
     
     festivo_perc = 0.20  # +20% per festivi (NON usato per BGY che ha forfait fisso)
     

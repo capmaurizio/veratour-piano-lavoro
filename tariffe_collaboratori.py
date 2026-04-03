@@ -1541,31 +1541,29 @@ def calcola_tariffa_collaboratore(
             'errore': errore_tl
         }
     
-    # REGOLE STANDARD (con modifiche per NAP notturno +15%, FCO notturno +20%)
+    # REGOLE STANDARD (con modifiche per CTA, PMO, NAP, FCO, ecc)
+    def _get_base_default(apt: str) -> float:
+        if apt in ['CTA', 'PMO', 'PSA']: return 60.0
+        if apt in ['BRI', 'BLQ']: return 53.0
+        return 58.0
+
     if tariffa is None:
         # Usa tariffe default per aeroporto (se disponibili) o tariffe generiche
-        base_eur = 58.0  # Default
+        base_eur = _get_base_default(apt_upper)
         durata_base_h = 3.0  # Default
         extra_eur_per_h = 12.0  # Default
-        # FCO: notturno +20% (Accordo Assistenti FCO 2026)
-        # NAP: notturno +15% (REGOLE OPERATIVE 2026)
+        # FCO: notturno +20%
         if apt_upper == 'FCO':
-            notturno_perc = 0.20  # +20% per FCO
-        elif apt_upper == 'NAP':
-            notturno_perc = 0.15  # +15% per NAP
+            notturno_perc = 0.20
         else:
-            notturno_perc = 0.15  # Default +15%
+            notturno_perc = 0.15  # Default +15% per tutti gli altri (incluso CTA, NAP, ecc)
         festivo_perc = 0.20  # Default +20%
     else:
-        base_eur = tariffa.base_eur or 58.0
+        base_eur = tariffa.base_eur or _get_base_default(apt_upper)
         durata_base_h = tariffa.durata_base_h or 3.0
         extra_eur_per_h = tariffa.extra_eur_per_h or 12.0
-        # FCO: notturno +20% (Accordo Assistenti FCO 2026)
-        # NAP: notturno +15% (REGOLE OPERATIVE 2026)
         if apt_upper == 'FCO':
             notturno_perc = 0.20  # Forza +20% per FCO
-        elif apt_upper == 'NAP':
-            notturno_perc = 0.15  # Forza +15% per NAP
         else:
             notturno_perc = tariffa.notturno_perc or 0.15
         festivo_perc = tariffa.festivo_perc or 0.20
