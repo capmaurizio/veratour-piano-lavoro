@@ -10,43 +10,43 @@ def get_assigned_rule(apt: str, name: str, categoria: str) -> str:
     
     if apt_upper == 'BGY':
         if 'filippo' in name_norm and 'bonfanti' in name_norm:
-            return "📌 BGY Senior (Forfait 30€/3h, Extra 10€/h, Festivo 50€/3h, Notturno +15%)"
+            return "BGY Senior (Forfait 30€/3h, Extra 10€/h, Festivo 50€/3h, Notturno +15%)"
         if 'senior' in categoria_str:
-            return "📌 BGY Senior (Forfait 30€/3h, Extra 10€/h, Festivo 50€/3h, Notturno +15%)"
-        return "🔷 BGY Junior (Forfait 24€/3h, Extra 8€/h, Festivo 40€/3h, Notturno +15%)"
+            return "BGY Senior (Forfait 30€/3h, Extra 10€/h, Festivo 50€/3h, Notturno +15%)"
+        return "BGY Junior (Forfait 24€/3h, Extra 8€/h, Festivo 40€/3h, Notturno +15%)"
         
     elif apt_upper == 'MXP':
         if 'manuela' in name_norm and 'gregori' in name_norm:
-            return "📌 MXP Eccezione (Base fissa 60€, Extra solo ATD 12€/h, Notturno +20%, Festivo +20%, INPS +4%)"
+            return "MXP Eccezione (Base fissa 60€, Extra solo ATD 12€/h, Notturno +20%, Festivo +20%, INPS +4%)"
         if 'martina' in name_norm and 'nettis' in name_norm:
-            return "🔷 MXP Eccezione (Equiparata a BGY Junior: Forfait 24€/3h, Extra 8€/h, ecc.)"
-        return "⚙️ MXP Standard Generico (Da verificare)"
+            return "MXP Eccezione (Equiparata a BGY Junior: Forfait 24€/3h, Extra 8€/h)"
+        return "MXP Standard Generico (Da verificare)"
         
     elif apt_upper == 'NAP':
         if any(n in name_norm for n in ['rita', 'sara', 'camilla']):
-            return "🔷 NAP Junior (Forfait 50€/3h lordi, Extra 10€/h lordi, no doppio extra, Notturno +15%)"
-        return "📌 NAP Senior/Standard (Forfait 56€/3h lordi, Extra 12€/h lordi, Notturno +15%)"
+            return "NAP Junior (Forfait 50€/3h lordi, Extra 10€/h lordi, no doppio extra, Notturno +15%)"
+        return "NAP Senior/Standard (Forfait 56€/3h lordi, Extra 12€/h lordi, Notturno +15%)"
         
     elif apt_upper == 'VRN':
-        return "⚙️ VRN Standard (Logica blocchi forfettari completi 56€, Extra arrotondato 3h, Notte fissa +11.20€)"
+        return "VRN Standard (Logica blocchi forfettari completi 56€, Extra arrotondato 3h, Notte fissa +11.20€)"
         
     elif apt_upper == 'FCO':
-        return "⚙️ FCO Standard (Base 53.6€/2.5h, Extra 9.5€/h, Incentive 70€/2.5h, Notturno Split 22:00-06:00)"
+        return "FCO Standard (Base 53.6€/2.5h, Extra 9.5€/h, Incentive 70€/2.5h, Notturno Split 22:00-06:00)"
         
     elif apt_upper in ['CTA', 'TRN', 'PMO', 'PSA']:
-        return f"⚙️ {apt_upper} Standard (Base 60€/3h, Extra 12€/h, Notturno +15%, Festivo +20%)"
+        return f"{apt_upper} Standard (Base 60€/3h, Extra 12€/h, Notturno +15%, Festivo +20%)"
         
     elif apt_upper in ['BRI', 'BLQ']:
-        return f"⚙️ {apt_upper} Standard (Base 53€/3h, Extra 12€/h, Notturno +15%, Festivo +20%)"
+        return f"{apt_upper} Standard (Base 53€/3h, Extra 12€/h, Notturno +15%, Festivo +20%)"
         
-    return "🌐 Standard/Generico (Regola base letta da foglio Excel principale)"
+    return "Standard/Generico (Regola base letta da foglio Excel principale)"
 
 
 def render_regolamento_page():
-    st.title("📚 Regolamenti Operativi e Tariffe")
+    st.title("Regolamenti Operativi e Tariffe")
     st.markdown("Consulta l'elenco degli assistenti e le relative regole di calcolo impostate in sistema.")
     
-    tab_collaboratori, tab_dettagli = st.tabs(["👥 Elenco Collaboratori", "📜 Dettaglio Regole per Aeroporto"])
+    tab_collaboratori, tab_dettagli = st.tabs(["Elenco Collaboratori", "Dettaglio Regole per Aeroporto"])
     
     with tab_collaboratori:
         st.subheader("Elenco Collaboratori e Regole Assegnate")
@@ -69,7 +69,21 @@ def render_regolamento_page():
             
         if data:
             df = pd.DataFrame(data)
-            df_display = st.dataframe(df, use_container_width=True, hide_index=True)
+            
+            # Utilizza column_config per allargare al massimo la visualizzazione 
+            # e permettere la lettura dell'intera regola.
+            st.dataframe(
+                df, 
+                use_container_width=True, 
+                hide_index=True,
+                column_config={
+                    "Logica Assegnata nel Calcolatore": st.column_config.TextColumn(
+                        "Logica Assegnata",
+                        width="large",
+                    ),
+                    "Aeroporto": st.column_config.TextColumn("APT", width="small")
+                }
+            )
             
             st.info(f"Totale collaboratori censiti a sistema: **{len(data)}**")
         else:
@@ -123,3 +137,31 @@ def render_regolamento_page():
         * **Incentive:** Trattamento base innalzato a € 70,00 lordi e ore extra riconosciute a € 15,00/ora.
         * **Split Notturno:** Il calcolo divide puntualmente le ore notturne svolte **dentro al blocco base** (+15% applicato sui 53.6€ rateizzati per ora/minuto) e quelle **svolte nelle ore extra** (+15% applicato sui 9.5€).
         """)
+        
+        st.divider()
+
+        st.subheader("Catania (CTA) / Torino (TRN) / Palermo (PMO) / Pisa (PSA)")
+        st.markdown("""
+        * **Turno base:** Forfait di 3 ore valutate **€ 60,00 lorde**.
+        * **Extra:** Valutati sugli sforamenti o ritardi a **€ 12,00 lordi/h**.
+        * **Notturno:** Riconosciuto applicando **+15%** sull'equivalente orario.
+        * **Festività:** Nel giorno festivo lo stipendio base e gli extra maturati ricevono una maggiorazione fissa a corpo del **+20%**.
+        """)
+        
+        st.divider()
+
+        st.subheader("Bari (BRI) / Bologna (BLQ)")
+        st.markdown("""
+        * **Turno base:** Forfait di 3 ore valutate **€ 53,00 lorde**.
+        * **Extra:** Valutati a **€ 12,00 lordi/h**.
+        * **Notturno e Festivo:** Stesse regole tariffarie della fascia CTA (+15% notte, +20% nei giorni rossi).
+        """)
+
+        st.divider()
+
+        st.subheader("Venezia (VCE) / Treviso (TSF) / Altri (es. CAG)")
+        st.markdown("""
+        * Le logiche specifiche di questi aeroporti sono interamente **gestite in via dinamica tramite il listino prezzi**.
+        * I limiti orari e i tetti per il calcolo non presentano blocchi forfettari cablati o stringenti in applicazione, si adeguano a quanto depositato in \`tariffe_collaboratori.xlsx\` (Foglio Regole/Collaboratori).
+        """)
+
