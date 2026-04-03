@@ -28,7 +28,7 @@ def get_assigned_rule(apt: str, name: str, categoria: str) -> str:
         return "NAP Senior/Standard (Forfait 56€/3h lordi, Extra 12€/h lordi, Notturno +15%)"
         
     elif apt_upper == 'VRN':
-        return "VRN Standard (Logica blocchi forfettari completi 56€, Extra arrotondato 3h, Notte fissa +11.20€)"
+        return "VRN a Scalini (Junior 50€/3h o Senior 58€/3h, scalini da +12€/ora, Notturno +15%)"
         
     elif apt_upper == 'FCO':
         return "FCO Standard (Base 53.6€/2.5h, Extra 9.5€/h, Incentive 70€/2.5h, Notturno Split 22:00-06:00)"
@@ -171,22 +171,25 @@ def render_regolamento_page():
 
         st.subheader("Verona (VRN)")
         st.markdown("""
-        * **Logica a Blocchi:** Un turno standard è di 3 ore (Forfait € 56 lordo). Qualsiasi extra scatta esclusivamente per tranche intere da 3 ore (se si supera l'orario base).
-        * **Notte Fissa:** Il notturno è un bonus forfettario rigido di **€ 11,20 lordi** e scatta se in turno si intercetta parzialmente la fascia 22:00-06:00.
+        * **Logica a Scalini (Pacchetti):** A Verona il compenso non matura a minuti, ma a ore intere assegnate.
+        * **Pacchetto Junior:** Base 3 ore = **€ 50,00 lorde**. Ogni ora successiva programmata o maturata costa +€ 12,00 (es: 4h=62€, 5h=74€... fino a 8h=110€).
+        * **Pacchetto Senior:** Base 3 ore = **€ 58,00 lorde**. Ogni ora successiva programmata o maturata costa +€ 12,00 (es: 4h=70€, 5h=82€... fino a 8h=118€).
+        * **Transfer:** Forfait € 45,00 lorde per 2 ore (Junior), extra € 12/h. 
+        * **Notturno:** Maggiorazione parziale del **+15%** proporzionale alle ore di notte.
+        * **Festivi:** In caso di giorno festivo l'intero lordo subisce in pieno il rincaro **+20%**.
         
-        > **💡 Turno VRN (Feriale)**: Turno terminato alle 23:30 (durata 4 ore e 30 minuti).
-        > * Superate le prime 3h, scatta l'intero blocco rigido del secondo turno (+3 ore).
-        > * Valutazione: 2 Blocchi base = **€ 56,00 x 2 = € 112,00 lordi**.
-        > * Bonus notte toccata a fine turno feriale: **+ € 11,20 lordi**. | Totale **123,20€ lordi**.
+        > **💡 Turno VRN Junior (Feriale)**: Turno durato 4 ore e 15 minuti.
+        > * Il sistema arrotonda al pacchetto delle 4 ore + extra. Pacchetto 4h = **€ 62,00 lorde**. I 15 minuti extra causano un'ulteriore frazione a 12€/h (**€ 3,00**). Totale **65,00€ lordi**.
         >
-        > **💡 Turno VRN (Festivo)**: Stesso turno di 4 ore e 30 in giorno festivo
-        > * Subtotale lordo cumulato 123,20 riceve maggiorazione festiva integrale del **+20%**. | Totale **147,84€ lordi**.
+        > **💡 Turno VRN Senior (Festivo)**: Turno di 5 ore esatte.
+        > * Pacchetto Senior 5 ore = **€ 82,00 lorde**. Giorno festivo: **+20%** (= € 16,40). Totale **98,40€ lordi**.
         """)
         
         with st.expander("🍎 Spiegazione Semplice (per i non addetti ai lavori)"):
             st.markdown("""
-            A Verona non si vendono le mele sfuse. Si vendono solo **scatoloni chiusi da 3 ore l'uno**. 
-            Se tu hai lavorato 3 ore e 15 minuti, significa che hai sforato nello scatolone successivo... e il fruttivendolo ti fa comprare (e pagare!) un intero secondo scatolone grande, facendoti di fatto erogare **56 € + 56 € = 112 €**. Non puoi spezzare l'acquisto!
+            A Verona il fruttivendolo ha preparato dei **cestini a grandezza fissa (da 3, 4, 5 o 6 ore)**.
+            Se sei Junior il cestino base costa 50 €, e ogni volta che vuoi una scatola più grande ci aggiunge sempre 12 €. (4 fette=62€, 5 fette=74€...). Se sei Senior il cesto base parte più caro (58 €) e cresce sempre di 12 €. 
+            E se il tuo turno finisce a "metà" tra una scatola e l'altra? Il sistema ti fa pagare la grandezza della scatola intera più vicina che hai superato, più le briciole che hai fatto rimborsandole a peso (12€ al kg). Di Domenica, tutto il negozio rincara le etichette del 20%.
             """)
         
         st.divider()
