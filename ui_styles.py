@@ -121,7 +121,7 @@ html, body, [data-testid="stAppViewContainer"], .main, .block-container {
 .block-container {
     padding-top: 1rem !important;
     padding-bottom: 0.5rem !important;
-    max-width: 960px !important;
+    max-width: 1400px !important;
 }
 
 /* ═══════════════════════════════════════════
