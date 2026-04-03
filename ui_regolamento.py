@@ -114,6 +114,14 @@ def render_regolamento_page():
         > * Base 3h: sale a **€ 50,00** | Extra 1h: **€ 12,00** (+20%) | Notte: ristima proporzionale **€ 1,80** | **Totale: € 63,80 netto**
         """)
         
+        with st.expander("🍎 Spiegazione Semplice (per i non addetti ai lavori)"):
+            st.markdown("""
+            Immagina di andare dal fruttivendolo e comprare un cesto con **3 mele** assicurate. 
+            A Bergamo il cesto lo paghi pulito **24 €** (quindi **8 € a mela**). Questa è la base "Junior". Filippo invece ha le mele più grandi (Senior) e il cesto gli costa **30 €** (quindi **10 € a mela**).
+            Se compri mele fuori dal cesto base (le famose "ore extra"), il fruttivendolo te le mette nel sacchetto rispettivamente a 8 € o a 10 € l'una.
+            *Cosa succede di Domenica?* Il fruttivendolo sa che c'è meno gente e per tenere aperto ti fa pagare il cestino base **40 €** (invece di 24), e ogni mela singola oltre le prime tre te la fa pagare il 20% in più.
+            """)
+        
         st.divider()
         
         st.subheader("Malpensa (MXP)")
@@ -127,6 +135,12 @@ def render_regolamento_page():
         > **💡 Manuela Eccezione (Festivo Standard)**: Turno senza ritardo, diurno ma scatta la festività.
         > * Base: **€ 60,00** (+20% festivo globale sulle basi) = **€ 72,00** | + 4% INPS (**€ 2,88**) | **Totale: € 74,88 lordo**
         """)
+        
+        with st.expander("🍎 Spiegazione Semplice (per i non addetti ai lavori)"):
+            st.markdown("""
+            A Malpensa Manuela ha una specie di "abbonamento Premium". Il suo distributore costa fisso **60 €**, indipendentemente da quante mele ci siano dentro. Non importa se aspetta per ore. 
+            Viene pagata un extra solo se succede un imprevisto gravissimo certificato all'ultimo minuto ("il Ritardo ATD"), per cui riceve 12€ addizionali. Sopra a qualsiasi spesa batte sullo scontrino, il governo le aggiunge sempre il 4% di previdenza (INPS) e lei incassa l'importo tutto lordo, mettendosi le tasse in tasca da gestirsi poi da sola (Partita IVA).
+            """)
         
         st.divider()
         
@@ -148,6 +162,11 @@ def render_regolamento_page():
         > * Base 3h: **€ 56,00 lordi** | Extra 1h: **€ 12,00 lordi** | Subtotale **68€ lordi** | Simulato netto **(-20%) = € 54,40 netti**.
         """)
         
+        with st.expander("🍎 Spiegazione Semplice (per i non addetti ai lavori)"):
+            st.markdown("""
+            A Napoli il fruttivendolo vende la sua cesta di mele per **50 €**. Il problema è che all'uscita dal negozio passa sempre l'esattore delle tasse che trattiene brutalmente 1/5 della spesa (il **20% di ritenuta**). Quindi te ne torni a casa con solo **40 € netti** in tasca. Inoltre, se decidi di comprare le mele nel giorno di Natale (Festivo), il cartellino sul prezzo indica subito un +20% di partenza.
+            """)
+        
         st.divider()
 
         st.subheader("Verona (VRN)")
@@ -163,6 +182,12 @@ def render_regolamento_page():
         > **💡 Turno VRN (Festivo)**: Stesso turno di 4 ore e 30 in giorno festivo
         > * Subtotale lordo cumulato 123,20 riceve maggiorazione festiva integrale del **+20%**. | Totale **147,84€ lordi**.
         """)
+        
+        with st.expander("🍎 Spiegazione Semplice (per i non addetti ai lavori)"):
+            st.markdown("""
+            A Verona non si vendono le mele sfuse. Si vendono solo **scatoloni chiusi da 3 ore l'uno**. 
+            Se tu hai lavorato 3 ore e 15 minuti, significa che hai sforato nello scatolone successivo... e il fruttivendolo ti fa comprare (e pagare!) un intero secondo scatolone grande, facendoti di fatto erogare **56 € + 56 € = 112 €**. Non puoi spezzare l'acquisto!
+            """)
         
         st.divider()
 
