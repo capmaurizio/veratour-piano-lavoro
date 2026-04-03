@@ -449,15 +449,23 @@ def genera_template_assistente(
             # Determina la tariffa oraria extra corretta per l'aeroporto di questo turno
             apt_del_turno = str(row_piano.get('APT', '')).strip().upper()
             tipo_servizio_del_turno = str(row_piano.get('SERVIZIO', row_piano.get('SERVIZI', ''))).strip().upper()
+            assistente_del_turno = str(row_piano.get('ASSISTENTE', '')).strip().lower()
+            
             # Tariffa oraria extra corretta per aeroporto
             tariffa_extra_h = TARIFFE_EXTRA_PER_APT.get(apt_del_turno, 12.0)
-            # Aggiustamenti per tipo servizio
-            if apt_del_turno == 'FCO' and 'INCENTIVE' in tipo_servizio_del_turno:
-                tariffa_extra_h = 15.0  # FCO incentive: €15/h
-            elif apt_del_turno == 'NAP' and ('ARRIVI' in tipo_servizio_del_turno or 'MEET' in tipo_servizio_del_turno):
-                tariffa_extra_h = 12.0  # NAP meet&greet: €12/h Senior
-            elif apt_del_turno == 'NAP' and 'TRANSFER' in tipo_servizio_del_turno:
-                tariffa_extra_h = 12.0  # NAP transfer: €12/h Senior
+            
+            # Aggiustamenti per tipo servizio e assistente (Junior NAP)
+            is_junior_nap = apt_del_turno == 'NAP' and any(n in assistente_del_turno for n in ['rita', 'sara', 'camilla'])
+            
+            if is_junior_nap:
+                tariffa_extra_h = 10.0  # NAP Junior: €10/h per tutti i servizi
+            else:
+                if apt_del_turno == 'FCO' and 'INCENTIVE' in tipo_servizio_del_turno:
+                    tariffa_extra_h = 15.0  # FCO incentive: €15/h
+                elif apt_del_turno == 'NAP' and ('ARRIVI' in tipo_servizio_del_turno or 'MEET' in tipo_servizio_del_turno):
+                    tariffa_extra_h = 12.0  # NAP meet&greet: €12/h Senior
+                elif apt_del_turno == 'NAP' and 'TRANSFER' in tipo_servizio_del_turno:
+                    tariffa_extra_h = 12.0  # NAP transfer: €12/h Senior
             
             if modulo_calcolo and hasattr(modulo_calcolo, 'genera_formula_excel_extra'):
                 import inspect

@@ -1041,11 +1041,13 @@ def calcola_tariffa_collaboratore(
     # Transfer Veratour: €50, Meet&Greet altri TO: €56
     # Incentive (Iantra): €60/2h30' + extra €15/h
     if apt_upper == 'NAP' and (tipo_servizio is None or tipo_servizio == '' or tipo_servizio == 'standard'):
+        nome_norm = (nome or "").lower().strip()
+        is_junior_nap = any(n in nome_norm for n in ['rita', 'sara', 'camilla'])
         # NAP Tariffe Standard unificate (Accordo NAP 2026) per Senior e Junior
-        # Base: €56/2h30', extra €12/h
-        base_eur = 56.0
-        durata_base_h = 2.5
-        extra_eur_per_h = 12.0
+        # Base Senior: €56/3h, extra €12/h. Junior: €50/3h, extra €10/h
+        base_eur = 50.0 if is_junior_nap else 56.0
+        durata_base_h = 3.0
+        extra_eur_per_h = 10.0 if is_junior_nap else 12.0
         notturno_perc = 0.15  # +15%
         festivo_perc = 0.20   # +20%
         
@@ -1158,10 +1160,12 @@ def calcola_tariffa_collaboratore(
     
     # 4. NAP - Tariffe Transfer (Accordo NAP 2026)
     if apt_upper == 'NAP' and tipo_servizio and 'transfer' in str(tipo_servizio).lower():
+        nome_norm = (nome or "").lower().strip()
+        is_junior_nap = any(n in nome_norm for n in ['rita', 'sara', 'camilla'])
         # Transfer unificato (Accordo NAP 2026) per Senior e Junior
-        # Forfettario €50, extra €12/h
+        # Forfettario €50, extra €12/h (Senior) o €10/h (Junior)
         base_eur = 50.0
-        extra_eur_per_h = 12.0
+        extra_eur_per_h = 10.0 if is_junior_nap else 12.0
         durata_base_h = 0.0  # Forfettaria, non ha durata base fissa
         notturno_perc = 0.15  # +15%
         festivo_perc = 0.20  # +20%
@@ -1215,10 +1219,12 @@ def calcola_tariffa_collaboratore(
     
     # 5. NAP - Tariffe Arrivi/Meet&Greet (Accordo NAP 2026)
     if apt_upper == 'NAP' and tipo_servizio and ('arrivi' in str(tipo_servizio).lower() or 'meet' in str(tipo_servizio).lower()):
+        nome_norm = (nome or "").lower().strip()
+        is_junior_nap = any(n in nome_norm for n in ['rita', 'sara', 'camilla'])
         # Arrivi/Meet&Greet unificato (Accordo NAP 2026) per Senior e Junior
-        # Base €56/2h30', extra €12/h
-        base_eur = 56.0
-        extra_eur_per_h = 12.0
+        # Base €56/2h30', extra €12/h (Senior). Junior: €50 base, €10/h extra
+        base_eur = 50.0 if is_junior_nap else 56.0
+        extra_eur_per_h = 10.0 if is_junior_nap else 12.0
         durata_base_h = 2.5
         notturno_perc = 0.15  # +15%
         festivo_perc = 0.20   # +20%
@@ -1687,18 +1693,22 @@ def create_collaboratori_sheet(
             elif 'TRANSFER' in arrivi_trf_str or 'TRF' in arrivi_trf_str:
                 tipo_servizio = 'transfer'
         
-        # Calcola tariffe usando il modulo
-        # NOTA: extra_min=0 perché EXTRA_MIN dal blocco contiene già i minuti oltre la base,
-        # e calcola_tariffa_collaboratore li ricalcola internamente da durata_min.
-        # Passare extra_min causerebbe doppio conteggio.
+        # Calcola tariffe usando il modulo.
+        # extra_min (ritardo ATD da Veratour) viene passato correttamente:
+        # - durata_min = dal blocco turno (start→end, senza ATD)
+        # - extra_min  = ritardo ATD oltre fine turno (separato, no doppio conteggio)
+        # calcola_tariffa_collaboratore calcola internamente:
+        #   ore_extra_base = max(0, durata_h - durata_base_h)  ← ore oltre la base
+        #   extra_atd      = extra_min / 60 * tariffa          ← ritardo ATD
         inizio_dt_val = row.get('INIZIO_DT') if 'INIZIO_DT' in row.index else None
         fine_dt_val = row.get('FINE_DT') if 'FINE_DT' in row.index else None
+        atd_delay_min = int(extra_min)  # minuti ritardo ATD da Veratour
         
         tariffe = calcola_tariffa_collaboratore(
             aeroporto=apt,
             nome=assistente,
             durata_min=durata_min,
-            extra_min=0,
+            extra_min=atd_delay_min,   # ← corretto: no più 0
             minuti_notturni=minuti_notturni,
             is_festivo=is_fest,
             tour_operator=tour_operator,
@@ -1715,11 +1725,33 @@ def create_collaboratori_sheet(
         if volo_val == 'nan' or volo_val == '':
             volo_val = ''
         
-        # EXTRA_MIN dal blocco contiene già i minuti oltre la base calcolati dal consuntivo
-        # Non ricalcolare per evitare doppio conteggio
+        # Calcola extra_min per display = ore oltre la durata base + ritardo ATD
+        # La durata base varia per aeroporto: NAP/FCO=2.5h, altri=3h, MXP=0
+        is_sand_to = 'SAND' in str(tour_operator).upper() if tour_operator else False
         tm = get_tariffe_manager()
         tariffa = tm.get_tariffa(apt, assistente, tour_operator)
-        extra_min_totali = int(extra_min)
+        if is_sand_to:
+            # SAND: no extra per contratto
+            extra_min_base_display = 0
+        elif apt == 'FCO':
+            extra_min_base_display = max(0, int(durata_min) - 150)  # 2.5h = 150 min
+        elif apt == 'NAP':
+            if tipo_servizio in ('arrivi', 'incentive'):
+                extra_min_base_display = max(0, int(durata_min) - 150)  # 2.5h = 150 min
+            elif tipo_servizio == 'transfer':
+                extra_min_base_display = 0  # Transfer: extra solo su ritardo ATD
+            else:
+                extra_min_base_display = max(0, int(durata_min) - 180)  # Standard: 3h = 180 min
+        elif apt == 'BGY':
+            extra_min_base_display = max(0, int(durata_min) - 180)  # 3h = 180 min
+        elif apt == 'VRN':
+            ore_intere_vrn = max(3, int(durata_min // 60))
+            extra_min_base_display = max(0, int(durata_min) - ore_intere_vrn * 60)
+        elif apt == 'MXP':
+            extra_min_base_display = 0  # MXP: extra solo da ritardo ATD
+        else:
+            extra_min_base_display = max(0, int(durata_min) - 180)  # default 3h
+        extra_min_totali = extra_min_base_display + atd_delay_min
         
         rows_collaboratori.append({
             'DATA': data_str,
