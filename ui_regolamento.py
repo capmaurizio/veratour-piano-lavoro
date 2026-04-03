@@ -232,6 +232,12 @@ def render_regolamento_page():
         > * **Totale: € 72,00 lordi**.
         """)
         
+        with st.expander("🍎 Spiegazione Semplice (per i non addetti ai lavori)"):
+            st.markdown("""
+            Nelle isole e in alcune città (Catania, Palermo, Torino, Pisa) il fruttivendolo vende la solita cesta da 3 mele, ma la fa pagare un po' di più: **60 €** in totale. 
+            Se però decidi di comprare una mela in più (o se il corriere tarda ad arrivare), te la vende sempre allo stesso prezzo nazionale degli sciolti: **12 € a mela**. C'è la classica tassa del 15% in più se compri di notte, e nelle feste il conto alla cassa lievita sempre del 20%.
+            """)
+        
         st.divider()
 
         st.subheader("Bari (BRI) / Bologna (BLQ)")
@@ -245,6 +251,12 @@ def render_regolamento_page():
         > * Extra 30m: **€ 6,00** (rateo sui minuti effettivi).
         > * **Totale: € 59,00 lordi**.
         """)
+        
+        with st.expander("🍎 Spiegazione Semplice (per i non addetti ai lavori)"):
+            st.markdown("""
+            A Bari e Bologna il fruttivendolo è un filo più economico: ti vende la cesta da 3 mele a soli **53 €**. 
+            Ma attenzione! Come tutti gli altri, quando chiedi un "extra" o hai un ritardo, ti fa pagare la tariffa nazionale fissa per lo sfuso (cioè **12 € per ogni mela singola** in più). Regole solite per notturno e feste: +15% per il buio e +20% a Natale o Pasqua.
+            """)
 
         st.divider()
 
