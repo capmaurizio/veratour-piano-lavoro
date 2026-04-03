@@ -114,12 +114,10 @@ def render_regolamento_page():
         > * Base 3h: sale a **€ 50,00** | Extra 1h: **€ 12,00** (+20%) | Notte: ristima proporzionale **€ 1,80** | **Totale: € 63,80 netto**
         """)
         
-        with st.expander("🍎 Spiegazione Semplice (per i non addetti ai lavori)"):
+        with st.expander("🧸 Spiegato a un bambino di Prima Elementare (I Mattoncini LEGO)"):
             st.markdown("""
-            Immagina di andare dal fruttivendolo e comprare un cesto con **3 mele** assicurate. 
-            A Bergamo il cesto lo paghi pulito **24 €** (quindi **8 € a mela**). Questa è la base "Junior". Filippo invece ha le mele più grandi (Senior) e il cesto gli costa **30 €** (quindi **10 € a mela**).
-            Se compri mele fuori dal cesto base (le famose "ore extra"), il fruttivendolo te le mette nel sacchetto rispettivamente a 8 € o a 10 € l'una.
-            *Cosa succede di Domenica?* Il fruttivendolo sa che c'è meno gente e per tenere aperto ti fa pagare il cestino base **40 €** (invece di 24), e ogni mela singola oltre le prime tre te la fa pagare il 20% in più.
+            Immagina di giocare con i mattoncini Lego. A Bergamo ti diamo una base che contiene un gioco da 3 ore, che costa **24 mattoncini** (quini 8 all'ora). Questa è la scatola "Junior". Filippo, che è "Senior", ha un gioco più difficile e l'inizio gli costa **30 mattoncini**.
+            Se vuoi giocare un'oretta in più, tiri fuori dei mattoncini sfusi (8 o 10 per volta). Ma cosa succede se giochi di **Domenica**? C'è festa! La tua base di partenza vale improvvisamente ben **40 mattoncini magici** (o 50 per Filippo), e tutti gli extra diventano più ricchi.
             """)
         
         st.divider()
@@ -136,10 +134,10 @@ def render_regolamento_page():
         > * Base: **€ 60,00** (+20% festivo globale sulle basi) = **€ 72,00** | + 4% INPS (**€ 2,88**) | **Totale: € 74,88 lordo**
         """)
         
-        with st.expander("🍎 Spiegazione Semplice (per i non addetti ai lavori)"):
+        with st.expander("🧸 Spiegato a un bambino di Prima Elementare (I Mattoncini LEGO)"):
             st.markdown("""
-            A Malpensa Manuela ha una specie di "abbonamento Premium". Il suo distributore costa fisso **60 €**, indipendentemente da quante mele ci siano dentro. Non importa se aspetta per ore. 
-            Viene pagata un extra solo se succede un imprevisto gravissimo certificato all'ultimo minuto ("il Ritardo ATD"), per cui riceve 12€ addizionali. Sopra a qualsiasi spesa batte sullo scontrino, il governo le aggiunge sempre il 4% di previdenza (INPS) e lei incassa l'importo tutto lordo, mettendosi le tasse in tasca da gestirsi poi da sola (Partita IVA).
+            A Malpensa zia Manuela ha una regola specialissima: appena arriva nel parco, riceve un mega-salvadanaio con **60 mattoncini garantiti**. Non importa se deve aspettare tantissimo tempo seduta sulla panchina! 
+            Riceve dei mattoncini in più *"sfusi"* (12 all'ora) **SOLO** se l'aeroplano fa super ritardissimo. Alla fine del gioco, siccome fa tutto da sola in Partita IVA, il mago delle regole le regala addirittura un 4% di soldini finali extra per la sua pensione!
             """)
         
         st.divider()
@@ -162,9 +160,10 @@ def render_regolamento_page():
         > * Base 3h: **€ 56,00 lordi** | Extra 1h: **€ 12,00 lordi** | Subtotale **68€ lordi** | Simulato netto **(-20%) = € 54,40 netti**.
         """)
         
-        with st.expander("🍎 Spiegazione Semplice (per i non addetti ai lavori)"):
+        with st.expander("🧸 Spiegato a un bambino di Prima Elementare (I Mattoncini LEGO)"):
             st.markdown("""
-            A Napoli il fruttivendolo vende la sua cesta di mele per **50 €**. Il problema è che all'uscita dal negozio passa sempre l'esattore delle tasse che trattiene brutalmente 1/5 della spesa (il **20% di ritenuta**). Quindi te ne torni a casa con solo **40 € netti** in tasca. Inoltre, se decidi di comprare le mele nel giorno di Natale (Festivo), il cartellino sul prezzo indica subito un +20% di partenza.
+            A Napoli il costruttore ha fatto una scatola da gioco da **50 mattoncini**, e te li dà tutti. Il guaio è che quando stai per uscire dal cancello del parco e correre verso casa, c'è una follettina pasticciona (le tasse) che ti sfila via dalle mani 1 mattoncino ogni 5 (la Ritenuta del 20%). Così, piangendo un po', arrivi a casa con solo **40 mattoncini**. 
+            Per consolarti, se decidi di faticare il giorno di Natale, sai già che di partenza tutti i mattoncini che vinci sono più grandicelli del 20%!
             """)
         
         st.divider()
@@ -185,11 +184,11 @@ def render_regolamento_page():
         > * Pacchetto Senior 5 ore = **€ 82,00 lorde**. Giorno festivo: **+20%** (= € 16,40). Totale **98,40€ lordi**.
         """)
         
-        with st.expander("🍎 Spiegazione Semplice (per i non addetti ai lavori)"):
+        with st.expander("🧸 Spiegato a un bambino di Prima Elementare (I Mattoncini LEGO)"):
             st.markdown("""
-            A Verona il fruttivendolo ha preparato dei **cestini a grandezza fissa (da 3, 4, 5 o 6 ore)**.
-            Se sei Junior il cestino base costa 50 €, e ogni volta che vuoi una scatola più grande ci aggiunge sempre 12 €. (4 fette=62€, 5 fette=74€...). Se sei Senior il cesto base parte più caro (58 €) e cresce sempre di 12 €. 
-            E se il tuo turno finisce a "metà" tra una scatola e l'altra? Il sistema ti fa pagare la grandezza della scatola intera più vicina che hai superato, più le briciole che hai fatto rimborsandole a peso (12€ al kg). Di Domenica, tutto il negozio rincara le etichette del 20%.
+            A Verona il negozio giocattoli non vende assolutamente pezzi sfusi. Vende solo **scatole "Standard" già chiuse col nastro adesivo**.
+            Vuoi giocare per 3 ore? Ok, scatola base da 50 mattoncini. 
+            Ma se sfori, anche solo di 10 minuti, il commesso fa il furbetto e... ZAC! Timbro sulla fronte e ti costringe a prendere ed allargarti alla scatola successiva intera, che costa ben 62 mattoncini! Funziona tutto a scatoloni sigillati.
             """)
         
         st.divider()
@@ -210,11 +209,11 @@ def render_regolamento_page():
         > * **Totale complessivo:** 56,00 + 10,60 + 11,20 + 0,80 = **€ 78,60 lordi**.
         """)
         
-        with st.expander("🍎 Spiegazione Semplice (per i non addetti ai lavori)"):
+        with st.expander("🧸 Spiegato a un bambino di Prima Elementare (I Mattoncini LEGO)"):
             st.markdown("""
-            A Fiumicino, il cesto piccolo del fruttivendolo ha **2,5 mele** in totale e ti costa fisso **56 €**.
-            E se vuoi comprare mele in abbondanza? Nessun problema, ogni mela sfusa in più te la vende a **12 €**. 
-            Essendo aeroporto, lui vende anche di notte (dalle 23:00 alle 06:00): ma di notte è costretto a mettere un rincaro del 20% *solo sulle frazioni in cui acquisti col buio*. Se compravi il cesto fisso di notte paghi la tassa sulla base (+4,48 a mela), se aggiungevi mele sfuse di notte paghi la tassa sugli extra sfusi (+2,40 a mela). Tutto viene spezzato al centesimo minuto dal simulatore per non confondersi!
+            Se giochi a Fiumicino, ti danno un Castello Lego bellissimo che finisci in 2 orette e mezzo e ti vale **56 mattoncini**.
+            Se vuoi costruire ancora, compri dei muri extra a 12 mattoncini al colpo. 
+            Ma fai tantissima attenzione al sole! Quando scende la notte diventano tutti sonnacchiosi... se stavi ancora finendo di posare il castello base, per ogni mattoncino posato col buio pesto ti aggiungono 4 monetine (+20% di maggiorazione base). Se stavi già posando i muri extra, per ogni pezzo notturno ti pagano 2 monetinelle in più (2,40€). Un vero e proprio conteggio da orologiaio!
             """)
         
         st.divider()
@@ -232,10 +231,9 @@ def render_regolamento_page():
         > * **Totale: € 72,00 lordi**.
         """)
         
-        with st.expander("🍎 Spiegazione Semplice (per i non addetti ai lavori)"):
+        with st.expander("🧸 Spiegato a un bambino di Prima Elementare (I Mattoncini LEGO)"):
             st.markdown("""
-            Nelle isole e in alcune città (Catania, Palermo, Torino, Pisa) il fruttivendolo vende la solita cesta da 3 mele, ma la fa pagare un po' di più: **60 €** in totale. 
-            Se però decidi di comprare una mela in più (o se il corriere tarda ad arrivare), te la vende sempre allo stesso prezzo nazionale degli sciolti: **12 € a mela**. C'è la classica tassa del 15% in più se compri di notte, e nelle feste il conto alla cassa lievita sempre del 20%.
+            Nei parchi del Sud e delle Isole (come Catania e Palermo) al cancello d'entrata paghi **60 mattoncini Lego**. È un po' più caro inizialmente, ma se ti va di fare i compiti a casa o se stacchi un'oretta più tardi, ogni pezzetto extra te lo contano uguale al resto d'Italia (12). Al buio si sale del 15% e di Domenica rincasa pure del 20%!
             """)
         
         st.divider()
@@ -252,10 +250,9 @@ def render_regolamento_page():
         > * **Totale: € 59,00 lordi**.
         """)
         
-        with st.expander("🍎 Spiegazione Semplice (per i non addetti ai lavori)"):
+        with st.expander("🧸 Spiegato a un bambino di Prima Elementare (I Mattoncini LEGO)"):
             st.markdown("""
-            A Bari e Bologna il fruttivendolo è un filo più economico: ti vende la cesta da 3 mele a soli **53 €**. 
-            Ma attenzione! Come tutti gli altri, quando chiedi un "extra" o hai un ritardo, ti fa pagare la tariffa nazionale fissa per lo sfuso (cioè **12 € per ogni mela singola** in più). Regole solite per notturno e feste: +15% per il buio e +20% a Natale o Pasqua.
+            Qua al Sud, a Bari (ma anche su al Nord a Bologna), l'entrata è scontatissima: costa un pelino meno del solito, fissa a soli **53 mattoncini**. Se giochi di più, prendi i tuoi extra e le tue notti magiche esattamente come tutti a Catania.
             """)
 
         st.divider()
@@ -273,10 +270,9 @@ def render_regolamento_page():
         > * **Totale: € 70,00 lordi**.
         """)
         
-        with st.expander("🍎 Spiegazione Semplice (per i non addetti ai lavori)"):
+        with st.expander("🧸 Spiegato a un bambino di Prima Elementare (I Mattoncini LEGO)"):
             st.markdown("""
-            A Venezia (o negli altri aeroporti non citati sopra) si usa il "listino prezzi standard" nazionale di SCAY. 
-            Il fruttivendolo ha una normalissima cesta di 3 mele a **58 €**. Se gli chiedi un'altra mela, l'aggiunge al conto per 12 €. Niente blocchi obbligatori enormi o regole strane. C'è solo il rincaro notturno standard del 15% sul buio, o il 20% aggiuntivo se è il giorno di Natale!
+            A Venezia o negli altri aeroporti si usa il **"Listino Nazionale Lego!"**. È famosissimo! Lo scatter di base viene 58 mattoncini, se vai fuori tempo massimo sono mattoncini sfusi a dozzine, senza inventare pacchetti strani sigillati o regole strampalate di magie notturne mezze e mezze. Qua è tutto normale e lineare!
             """)
 
 
