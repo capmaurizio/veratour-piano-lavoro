@@ -610,6 +610,43 @@ def _calcola_noturno_extra_fco(
 
     return notte_forfait, notte_extra, ""
 
+
+def calcola_minuti_notturni_periodo(
+    inizio_dt: pd.Timestamp,
+    fine_dt: pd.Timestamp,
+    fascia_start_h: int = 23,
+    fascia_end_h: int = 5,
+) -> int:
+    """
+    Conta i minuti in fascia notturna tra inizio_dt e fine_dt (minuto per minuto).
+
+    Fascia notturna: da fascia_start_h:00 a fascia_end_h:00 (attraversa mezzanotte).
+    Esempi:
+      BGY:  fascia_start_h=23, fascia_end_h=5  → 23:00-05:00
+      NAP/altri: fascia_start_h=23, fascia_end_h=6  → 23:00-06:00
+      SAND: fascia_start_h=23, fascia_end_h=4  → 23:00-04:00 (approx 03:30)
+
+    Args:
+        inizio_dt: Timestamp inizio servizio
+        fine_dt:   Timestamp fine servizio (inclusi extra se già sommati)
+        fascia_start_h: Ora inizio fascia notturna (default 23)
+        fascia_end_h:   Ora fine fascia notturna   (default 5)
+
+    Returns:
+        Numero intero di minuti in fascia notturna
+    """
+    if inizio_dt is None or fine_dt is None or pd.isna(inizio_dt) or pd.isna(fine_dt):
+        return 0
+    notte = 0
+    curr = inizio_dt
+    while curr < fine_dt:
+        h = curr.hour
+        if h >= fascia_start_h or h < fascia_end_h:
+            notte += 1
+        curr += pd.Timedelta(minutes=1)
+    return notte
+
+
 def calcola_tariffa_collaboratore(
     aeroporto: str,
     nome: str,
@@ -646,105 +683,99 @@ def calcola_tariffa_collaboratore(
     
     # REGOLE SPECIFICHE PER AEROPORTO (dal documento DOCX)
     
-    # 1. BGY - Tariffe Festive Forfettarie (REGOLE OPERATIVE 2026)
-    if apt_upper == 'BGY' and is_festivo:
-        categoria = tariffa.categoria if tariffa else None
-        categoria_str = str(categoria).strip().upper() if categoria else ''
-        
-        # Tariffe forfettarie festive per BGY
-        if 'JUNIOR' in categoria_str:
-            # Junior: €40,00 per 3 ore (forfettario festivo)
-            base_eur = 40.0
-            durata_base_h = 3.0
-            # Se durata > 3h, calcola extra proporzionale
-            durata_h = durata_min / 60.0
-            if durata_h > 3.0:
-                ore_extra_base = durata_h - 3.0
-                extra_eur_per_h = 8.0  # €8/h per junior (dalle regole BGY)
-                extra = ore_extra_base * extra_eur_per_h
+    # 1. BGY – Tariffe Standard e Festive (REGOLE OPERATIVE BGY 2026)
+    # ─────────────────────────────────────────────────────────────────
+    # TUTTE le tariffe BGY sono già espresse in NETTI → nessuno scorporo da applicare.
+    # Junior (chiamata/ritenuta): €24,00 netti/h × 3h = €72 netti base
+    # Senior (chiamata):          €30,00 netti/h × 3h = €90 netti base
+    # Extra Junior: €8,00 netti/h | Extra Senior: €10,00 netti/h
+    # Festivo Junior forfettario: €40 netti/3h | Festivo Senior: €50 netti/3h
+    # Notturno: +15% (fascia 23:00-05:00)
+    # SAND: no extra (niente attesa decollo)
+    # Veratour/Alpitour: turni predefiniti — prolungamenti → ore extra
+    if apt_upper == 'BGY':
+        # Determina Junior/Senior da nome (lista BGY) o da categoria Excel
+        nome_upper_bgy = nome.upper().strip() if nome else ''
+        BGY_SENIOR_NAMES = {'FILIPPO BONFANTI', 'BONFANTI FILIPPO'}
+        categoria_bgy = tariffa.categoria if tariffa else None
+        categoria_bgy_str = str(categoria_bgy).strip().upper() if categoria_bgy else ''
+        is_senior_bgy = (nome_upper_bgy in BGY_SENIOR_NAMES) or ('SENIOR' in categoria_bgy_str)
+        # Default: Junior (tutti gli altri in lista sono junior)
+
+        to_upper_bgy = str(tour_operator).upper().strip() if tour_operator else ''
+        is_sand_bgy = 'SAND' in to_upper_bgy
+
+        extra_eur_per_h_bgy = 10.0 if is_senior_bgy else 8.0
+        durata_h_bgy = durata_min / 60.0
+        durata_base_h_bgy = 3.0
+
+        if is_festivo:
+            # ── FESTIVO BGY: forfettario ────────────────────────────────
+            base_eur_bgy = 50.0 if is_senior_bgy else 40.0  # netti
+
+            # Extra ore oltre 3h (SAND: no extra)
+            if is_sand_bgy:
+                extra_bgy = 0.0
             else:
-                extra = 0.0
-            
-            # Extra per ritardi ATD
-            if extra_min > 0:
-                extra += (extra_min / 60.0) * 8.0
-            
+                ore_extra_bgy = max(0, durata_h_bgy - durata_base_h_bgy)
+                extra_bgy = ore_extra_bgy * extra_eur_per_h_bgy
+                if extra_min > 0:
+                    extra_bgy += (extra_min / 60.0) * extra_eur_per_h_bgy
+
             # Notturno +15% (BGY: 23:00-05:00)
+            # Distingue minuti nel forfait base vs nelle ore extra
             if minuti_notturni > 0:
-                valore_orario = base_eur / durata_base_h
-                ore_notturne = minuti_notturni / 60.0
-                valore_parte_notturna = valore_orario * ore_notturne
-                notte = valore_parte_notturna * 0.15
-            else:
-                notte = 0.0
-            
-            # Festivo: già applicato nella base forfettaria, non serve moltiplicatore
-            totale_lordo = base_eur + extra + notte
-            
-            regime = tariffa.regime if tariffa else None
-            def scorpora_netto(lordo: float, regime_val: Optional[str]) -> float:
-                if not regime_val:
-                    return lordo * 0.80
-                regime_str = str(regime_val).strip().upper()
-                if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str or 'CHIAMATA' in regime_str:
-                    return lordo
-                elif 'RITENUTA' in regime_str or 'ACCONTO' in regime_str:
-                    return lordo * 0.80
+                if durata_h_bgy > durata_base_h_bgy and extra_bgy > 0:
+                    # Suddivisione proporzionale approssimativa
+                    prop_base = durata_base_h_bgy / durata_h_bgy
+                    min_nott_base = minuti_notturni * prop_base
+                    min_nott_extra = minuti_notturni * (1.0 - prop_base)
+                    val_ora_base = base_eur_bgy / durata_base_h_bgy  # €13.33 o €16.67/h
+                    notte_bgy = (
+                        (min_nott_base / 60.0) * val_ora_base * 0.15
+                        + (min_nott_extra / 60.0) * extra_eur_per_h_bgy * 0.15
+                    )
                 else:
-                    return lordo * 0.80
-            
+                    val_ora_base = base_eur_bgy / durata_base_h_bgy
+                    notte_bgy = (minuti_notturni / 60.0) * val_ora_base * 0.15
+            else:
+                notte_bgy = 0.0
+
+            # Tariffe BGY già NETTE — nessuno scorporo
+            totale_bgy = base_eur_bgy + extra_bgy + notte_bgy
             return {
-                'base_eur': round(scorpora_netto(base_eur, regime), 2),
-                'extra_eur': round(scorpora_netto(extra, regime), 2),
-                'notte_eur': round(scorpora_netto(notte, regime), 2),
-                'totale_eur': round(scorpora_netto(totale_lordo, regime), 2)
+                'base_eur':   round(base_eur_bgy, 2),
+                'extra_eur':  round(extra_bgy, 2),
+                'notte_eur':  round(notte_bgy, 2),
+                'totale_eur': round(totale_bgy, 2),
             }
-        elif 'SENIOR' in categoria_str:
-            # Senior: €50,00 per 3 ore (forfettario festivo)
-            base_eur = 50.0
-            durata_base_h = 3.0
-            # Se durata > 3h, calcola extra proporzionale
-            durata_h = durata_min / 60.0
-            if durata_h > 3.0:
-                ore_extra_base = durata_h - 3.0
-                extra_eur_per_h = 10.0  # €10/h per senior (dalle regole BGY)
-                extra = ore_extra_base * extra_eur_per_h
+        else:
+            # ── STANDARD BGY (non festivo) ──────────────────────────────
+            base_eur_bgy = 90.0 if is_senior_bgy else 72.0  # €30×3h o €24×3h netti
+
+            # Extra (ore oltre 3h + ritardi ATD) — SAND: no extra
+            if is_sand_bgy:
+                extra_bgy = 0.0
             else:
-                extra = 0.0
-            
-            # Extra per ritardi ATD
-            if extra_min > 0:
-                extra += (extra_min / 60.0) * 10.0
-            
+                ore_extra_bgy = max(0, durata_h_bgy - durata_base_h_bgy)
+                extra_bgy = ore_extra_bgy * extra_eur_per_h_bgy
+                if extra_min > 0:
+                    extra_bgy += (extra_min / 60.0) * extra_eur_per_h_bgy
+
             # Notturno +15% (BGY: 23:00-05:00)
             if minuti_notturni > 0:
-                valore_orario = base_eur / durata_base_h
-                ore_notturne = minuti_notturni / 60.0
-                valore_parte_notturna = valore_orario * ore_notturne
-                notte = valore_parte_notturna * 0.15
+                val_ora_bgy = base_eur_bgy / durata_base_h_bgy  # €24 o €30/h
+                notte_bgy = (minuti_notturni / 60.0) * val_ora_bgy * 0.15
             else:
-                notte = 0.0
-            
-            # Festivo: già applicato nella base forfettaria, non serve moltiplicatore
-            totale_lordo = base_eur + extra + notte
-            
-            regime = tariffa.regime if tariffa else None
-            def scorpora_netto(lordo: float, regime_val: Optional[str]) -> float:
-                if not regime_val:
-                    return lordo * 0.80
-                regime_str = str(regime_val).strip().upper()
-                if 'PARTITA IVA' in regime_str or 'P.IVA' in regime_str or 'P IVA' in regime_str or 'CHIAMATA' in regime_str:
-                    return lordo
-                elif 'RITENUTA' in regime_str or 'ACCONTO' in regime_str:
-                    return lordo * 0.80
-                else:
-                    return lordo * 0.80
-            
+                notte_bgy = 0.0
+
+            # Tariffe BGY già NETTE — nessuno scorporo
+            totale_bgy = base_eur_bgy + extra_bgy + notte_bgy
             return {
-                'base_eur': round(scorpora_netto(base_eur, regime), 2),
-                'extra_eur': round(scorpora_netto(extra, regime), 2),
-                'notte_eur': round(scorpora_netto(notte, regime), 2),
-                'totale_eur': round(scorpora_netto(totale_lordo, regime), 2)
+                'base_eur':   round(base_eur_bgy, 2),
+                'extra_eur':  round(extra_bgy, 2),
+                'notte_eur':  round(notte_bgy, 2),
+                'totale_eur': round(totale_bgy, 2),
             }
     
     # 1b. VRN - Tariffe Verona Junior/Senior (Accordo 2025/2024)

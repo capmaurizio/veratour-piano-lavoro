@@ -4,6 +4,59 @@ Questo file documenta le correzioni e le modifiche significative apportate al si
 
 ---
 
+## [2026-04-03] Fix 7 bug critici BGY — Regole Operative Bergamo 2026
+
+**File modificati**:
+- `tariffe_collaboratori.py`
+- `app_assistenti.py`
+- `genera_file_calcolo_assistente.py`
+
+### Problemi risolti
+
+| # | Bug | Impatto |
+|---|-----|---------|
+| 1 | **Mancava ramo BGY standard (non festivo)**: il codice gestiva BGY solo nel caso festivo, facendo ricadere i turni normali nel ramo generico (€58/3h o da Excel non configurato) | 🔴 Critico |
+| 2 | **Funzione helper notturno generica mancante**: `calcola_minuti_notturni_periodo()` non esisteva | 🟡 Medio |
+| 3 | **Notturno festivo BGY non distingueva base vs extra**: i minuti notturni nel festivo venivano calcolati tutti alla tariffa forfait, anche quelli nelle ore extra | 🟠 Alto |
+| 4 | **Scorporo 20% applicato su tariffe già nette**: le tariffe BGY sono definite come "netti" nelle regole operative, ma il codice applicava la ritenuta 20% portando Jr festivo da €40 a €32 | 🔴 Critico |
+| 5 | **`app_assistenti.py` usava durata_base 2h30 per tutti**: anche per BGY (che ha base 3h) e usava la funzione FCO per la fascia notturna (23:00-03:30 SAND) invece di 23:00-05:00 BGY | 🔴 Critico |
+| 6 | **`genera_file_calcolo_assistente.py` BGY festivo errato**: `notturno_perc = 0.20` (doveva essere 0.15), `extra_eur_per_h = base/durata = 13.33` (doveva essere €8/h junior) | 🟠 Alto |
+| 7 | **SAND BGY: mancava logica "no extra"**: Sand a BGY non ha attesa decollo, ma il ramo standard non includeva il check `is_sand` | 🟡 Medio |
+
+### Tariffe corrette implementate
+
+| Scenario | Junior | Senior |
+|----------|--------|--------|
+| Standard 3h (netto) | **€72** (€24/h × 3h) | **€90** (€30/h × 3h) |
+| Extra orario (netto) | **€8/h** | **€10/h** |
+| Festivo forfait (netto) | **€40** / 3h | **€50** / 3h |
+| Notturno | **+15%** (23:00–05:00) | **+15%** (23:00–05:00) |
+| SAND | base netta, no extra | base netta, no extra |
+
+> ⚠️ **NOTA IMPORTANTE**: Tutte le tariffe BGY sono già NETTE (contratto a chiamata o ritenuta d'acconto hanno la stessa tariffa netta). Il codice **non applica più** lo scorporo del 20%.
+
+### Assistenti BGY configurati
+
+| Nome | Livello | Base 3h | Extra/h |
+|------|---------|---------|---------|
+| Filippo Bonfanti | **Senior** | €90 | €10/h |
+| Tutti gli altri (14) | **Junior** | €72 | €8/h |
+
+### Test automatici superati ✅
+
+```
+Junior standard 3h:    Base=72.0€  Extra=0.0€  Totale=72.0€
+Junior standard 3h30:  Base=72.0€  Extra=4.0€  Totale=76.0€
+Senior standard 3h:    Base=90.0€  Extra=0.0€  Totale=90.0€
+Junior festivo 3h:     Base=40.0€  Extra=0.0€  Totale=40.0€
+Senior festivo 3h:     Base=50.0€  Extra=0.0€  Totale=50.0€
+Junior 3h+60min notte: Base=72.0€  Notte=3.6€  Totale=75.6€
+SAND Junior 4h:        Base=72.0€  Extra=0.0€  Totale=72.0€  (no extra)
+```
+
+---
+
+
 ## [2026-03-31] Fix Aliservice — Forward-fill TURNO errato per righe senza orario (M&G)
 
 **File modificato**: `Aliservice/consuntivoaliservice.py`  

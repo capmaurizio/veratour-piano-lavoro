@@ -671,28 +671,49 @@ else:
                         fine_naive = fine_naive + timedelta(days=1)
 
                     durata_totale_min  = int((fine_naive - inizio_naive).total_seconds() / 60) + extra_ritardo
-                    durata_base_min    = 150  # 2h30 forfait FCO (per altri APT è diverso ma OK come default)
+                    # Durata base per aeroporto: FCO=2h30 (150min), tutti gli altri=3h (180min)
+                    durata_base_min    = 150 if apt_val == 'FCO' else 180
                     durata_servizio_min = int((fine_naive - inizio_naive).total_seconds() / 60)
 
-                    # Converti in pandas Timestamp per passare alla funzione
+                    # Converti in pandas Timestamp
                     inizio_ts = pd.Timestamp(inizio_naive)
-                    # fine_ts è la fine del forfait (inizio + 2h30), o la fine reale se minore
+                    fine_servizio_ts = pd.Timestamp(fine_naive)
+                    # fine_ts forzata alla fine del forfait (o alla fine reale se minore)
                     fine_forfait_ts = inizio_ts + pd.Timedelta(minutes=durata_base_min)
-                    if pd.Timestamp(fine_naive) < fine_forfait_ts:
-                        fine_forfait_ts = pd.Timestamp(fine_naive)
+                    if fine_servizio_ts < fine_forfait_ts:
+                        fine_forfait_ts = fine_servizio_ts
 
-                    # Calcola notte con metodo esatto (minuto per minuto) usando i timestamp
+                    # Calcola notte con il metodo corretto per aeroporto
                     is_sand_op = 'SAND' in to_val.upper() if to_val else False
-                    from tariffe_collaboratori import _calcola_noturno_extra_fco
-                    notte_base_min_calc, notte_extra_min_calc, _ = _calcola_noturno_extra_fco(
-                        inizio_dt=inizio_ts,
-                        fine_dt=fine_forfait_ts,
-                        extra_min_ritardo=float(extra_ritardo + max(0, durata_servizio_min - durata_base_min) * 60 / 60),
-                        durata_base_min=float(durata_base_min),
-                        minuti_notturni_fallb=0.0,
-                        is_sand=is_sand_op
-                    )
-                    notte_totale_min = int(notte_base_min_calc + notte_extra_min_calc)
+
+                    if apt_val == 'FCO':
+                        # FCO: logica split forfait/extra con funzione dedicata
+                        from tariffe_collaboratori import _calcola_noturno_extra_fco
+                        notte_base_min_calc, notte_extra_min_calc, _ = _calcola_noturno_extra_fco(
+                            inizio_dt=inizio_ts,
+                            fine_dt=fine_forfait_ts,
+                            extra_min_ritardo=float(extra_ritardo + max(0, durata_servizio_min - durata_base_min)),
+                            durata_base_min=float(durata_base_min),
+                            minuti_notturni_fallb=0.0,
+                            is_sand=is_sand_op
+                        )
+                        notte_totale_min = int(notte_base_min_calc + notte_extra_min_calc)
+                    else:
+                        # BGY: 23:00-05:00 | SAND: 23:00-04:00 (approssima 03:30) | altri: 23:00-06:00
+                        from tariffe_collaboratori import calcola_minuti_notturni_periodo
+                        if apt_val == 'BGY':
+                            fascia_end = 5   # BGY: 23:00-05:00
+                        elif is_sand_op:
+                            fascia_end = 4   # SAND: 23:00 ≈ 03:30
+                        else:
+                            fascia_end = 6   # default: 23:00-06:00
+                        # Include sia la durata servizio che i minuti extra ATD
+                        fine_con_extra_ts = fine_servizio_ts + pd.Timedelta(minutes=extra_ritardo)
+                        notte_totale_min = calcola_minuti_notturni_periodo(
+                            inizio_ts, fine_con_extra_ts, fascia_start_h=23, fascia_end_h=fascia_end
+                        )
+                        notte_base_min_calc = float(notte_totale_min)
+                        notte_extra_min_calc = 0.0
 
                     # Mostra anteprima calcolo
                     st.markdown("**📊 Anteprima calcolo:**")

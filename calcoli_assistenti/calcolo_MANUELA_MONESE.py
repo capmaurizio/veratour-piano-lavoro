@@ -40,14 +40,20 @@ def calcola_tariffa_turno(
     # Modificare questi valori secondo le tariffe specifiche dell'assistente
     # REGOLE SPECIFICHE PER AEROPORTO (da REGOLE OPERATIVE COLLABORATORI 2026.docx)
     
-    # BGY - Festive Forfettarie
+    # BGY - Festive Forfettarie (REGOLE OPERATIVE BGY 2026) — tariffe già NETTE
     if apt_upper == 'BGY' and is_festivo:
-        # Junior: €40 per 3h, Senior: €50 per 3h
-        # TODO: Sostituire con categoria corretta (Junior/Senior)
-        base_eur = 40.0  # Modificare se Senior (50.0)
+        # Junior: €40 netti/3h | Senior: €50 netti/3h
+        base_eur = 40.0      # Modificare a 50.0 se Senior
         durata_base_h = 3.0
-        extra_eur_per_h = base_eur / durata_base_h  # Proporzionale
-        notturno_perc = 0.20
+        extra_eur_per_h = 8.0   # €8/h netti (junior) — modificare a 10.0 se Senior
+        notturno_perc = 0.15    # +15% BGY
+    # BGY - Standard (non festivo) (REGOLE OPERATIVE BGY 2026) — tariffe già NETTE
+    elif apt_upper == 'BGY':
+        # Junior: €72 netti (€24/h × 3h) | Senior: €90 netti (€30/h × 3h)
+        base_eur = 72.0      # Modificare a 90.0 se Senior
+        durata_base_h = 3.0
+        extra_eur_per_h = 8.0   # €8/h netti (junior) — modificare a 10.0 se Senior
+        notturno_perc = 0.15    # +15% BGY
     # FCO - Tariffe Incentive
     elif apt_upper == 'FCO' and tipo_servizio == 'incentive':
         base_eur = 60.0
@@ -85,7 +91,7 @@ def calcola_tariffa_turno(
         extra_eur_per_h = 12.0
         notturno_perc = 0.15 if apt_upper == 'NAP' else 0.20
     
-    festivo_perc = 0.20  # +20% per festivi
+    festivo_perc = 0.20  # +20% per festivi (NON usato per BGY — forfait fisso)
     
     # CALCOLO BASE
     durata_h = durata_effettiva_min / 60.0
@@ -111,34 +117,38 @@ def calcola_tariffa_turno(
     # TOTALE LORDO
     totale_lordo = base + extra + notte
     
-    # APPLICA FESTIVO
-    if is_festivo:
+    # APPLICA FESTIVO (solo per aeroporti NON BGY — BGY ha già forfait fisso festivo)
+    if is_festivo and apt_upper != 'BGY':
         totale_lordo = totale_lordo * (1 + festivo_perc)
     
-    # REGIME (Partita IVA vs Ritenuta d'acconto)
-    # TODO: Verificare regime dell'assistente
-    regime = "Ritenuta d'acconto"  # Modificare se Partita IVA
-    
     # SCORPORO NETTO
-    if regime and ('PARTITA IVA' in regime.upper() or 'P.IVA' in regime.upper()):
-        # Partita IVA: tariffe già al netto
+    # BGY: tariffe già espresse in NETTI — nessuno scorporo
+    if apt_upper == 'BGY':
         base_netto = base
         extra_netto = extra
         notte_netto = notte
         totale_netto = totale_lordo
     else:
-        # Ritenuta d'acconto: applica 20%
-        base_netto = base * 0.80
-        extra_netto = extra * 0.80
-        notte_netto = notte * 0.80
-        totale_netto = totale_lordo * 0.80
+        # REGIME (Partita IVA vs Ritenuta d'acconto)
+        # TODO: Verificare regime dell'assistente
+        regime = "Ritenuta d'acconto"  # Modificare se Partita IVA
+        if regime and ('PARTITA IVA' in regime.upper() or 'P.IVA' in regime.upper()):
+            base_netto = base
+            extra_netto = extra
+            notte_netto = notte
+            totale_netto = totale_lordo
+        else:
+            base_netto = base * 0.80
+            extra_netto = extra * 0.80
+            notte_netto = notte * 0.80
+            totale_netto = totale_lordo * 0.80
     
-    return {{
+    return {
         'base_eur': round(base_netto, 2),
         'extra_eur': round(extra_netto, 2),
         'notte_eur': round(notte_netto, 2),
         'totale_eur': round(totale_netto, 2)
-    }}
+    }
 
 
 def genera_formula_excel_extra(minuti_extra: int) -> str:
