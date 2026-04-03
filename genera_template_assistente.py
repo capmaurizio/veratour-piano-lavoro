@@ -457,8 +457,12 @@ def genera_template_assistente(
             # Aggiustamenti per tipo servizio e assistente (Junior NAP)
             is_junior_nap = apt_del_turno == 'NAP' and any(n in assistente_del_turno for n in ['rita', 'sara', 'camilla'])
             
+            is_martina_mxp = apt_del_turno == 'MXP' and 'martina' in assistente_del_turno and 'nettis' in assistente_del_turno
+            
             if is_junior_nap:
                 tariffa_extra_h = 10.0  # NAP Junior: €10/h per tutti i servizi
+            elif is_martina_mxp:
+                tariffa_extra_h = 8.0   # Martina (MXP): Equiparata a Junior BGY (€8/h)
             else:
                 if apt_del_turno == 'FCO' and 'INCENTIVE' in tipo_servizio_del_turno:
                     tariffa_extra_h = 15.0  # FCO incentive: €15/h
@@ -467,8 +471,8 @@ def genera_template_assistente(
                 elif apt_del_turno == 'NAP' and 'TRANSFER' in tipo_servizio_del_turno:
                     tariffa_extra_h = 12.0  # NAP transfer: €12/h Senior
                     
-            # Aggiustamento Festivo BGY: +20% sulle ore extra
-            if apt_del_turno == 'BGY':
+            # Aggiustamento Festivo BGY (e Martina MXP): +20% sulle ore extra
+            if apt_del_turno == 'BGY' or is_martina_mxp:
                 try:
                     from tariffe_collaboratori import get_italian_holidays_2025
                     festivi = get_italian_holidays_2025()

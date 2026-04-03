@@ -692,8 +692,10 @@ def calcola_tariffa_collaboratore(
     # Festivo Junior forfettario: €40 netti/3h | Festivo Senior: €50 netti/3h
     # Notturno: +15% (fascia 23:00-05:00)
     # SAND: no extra (niente attesa decollo)
-    # Veratour/Alpitour: turni predefiniti — prolungamenti → ore extra
-    if apt_upper == 'BGY':
+    nome_norm_check = (nome or "").lower().strip()
+    is_martina_mxp = (apt_upper == 'MXP' and 'martina' in nome_norm_check and 'nettis' in nome_norm_check)
+
+    if apt_upper == 'BGY' or is_martina_mxp:
         # Determina Junior/Senior da nome (lista BGY) o da categoria Excel
         nome_upper_bgy = nome.upper().strip() if nome else ''
         BGY_SENIOR_NAMES = {'FILIPPO BONFANTI', 'BONFANTI FILIPPO'}
@@ -1751,7 +1753,11 @@ def create_collaboratori_sheet(
             ore_intere_vrn = max(3, int(durata_min // 60))
             extra_min_base_display = max(0, int(durata_min) - ore_intere_vrn * 60)
         elif apt == 'MXP':
-            extra_min_base_display = 0  # MXP: extra solo da ritardo ATD
+            nome_norm_check = (assistente or "").lower().strip()
+            if 'martina' in nome_norm_check and 'nettis' in nome_norm_check:
+                extra_min_base_display = max(0, int(durata_min) - 180)  # Martina ha pacchetto base 3h come BGY
+            else:
+                extra_min_base_display = 0  # MXP normali (es. Manuela): extra solo da ritardo ATD
         else:
             extra_min_base_display = max(0, int(durata_min) - 180)  # default 3h
         extra_min_totali = extra_min_base_display + atd_delay_min

@@ -17,6 +17,7 @@ from ui_styles import (
 )
 from tour_operators import detect_tour_operators, find_tour_operator_folder
 from processing import run_calculation
+from ui_regolamento import render_regolamento_page
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Page config
@@ -25,7 +26,7 @@ st.set_page_config(
     page_title="SCAY Group — Piano Lavoro",
     page_icon=None,
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 inject_styles()
 
@@ -77,6 +78,12 @@ has_results = ('output_file' in st.session_state and
                st.session_state['output_file'] is not None)
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Menu Sidebar (Sezioni e Navigazione)
+# ═══════════════════════════════════════════════════════════════════════════════
+st.sidebar.markdown('<h2>SCAY Admin Panel</h2>', unsafe_allow_html=True)
+st.sidebar.markdown('<hr style="margin:0.5em 0;" />', unsafe_allow_html=True)
+app_page = st.sidebar.radio("Seleziona Strumento:", ["🧮 Calcolo Piano Lavoro", "📚 Regolamenti & Tariffe"])
+
 # Top bar + logout
 # ═══════════════════════════════════════════════════════════════════════════════
 render_top_bar()
@@ -111,15 +118,25 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is None:
     # Step 0: waiting for upload
-    render_stepper(0)
-    st.markdown(
-        '<div style="text-align:center;padding:24px 0;color:var(--ink-4);font-size:0.85rem;">'
-        'Seleziona un file Excel per iniziare l\'elaborazione.</div>',
-        unsafe_allow_html=True,
-    )
+    if app_page == "📚 Regolamenti & Tariffe":
+        render_regolamento_page()
+    else:
+        render_stepper(0)
+        st.markdown(
+            '<div style="text-align:center;padding:24px 0;color:var(--ink-4);font-size:0.85rem;">'
+            'Seleziona un file Excel per iniziare l\'elaborazione.</div>',
+            unsafe_allow_html=True,
+        )
     render_footer()
     st.stop()
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Se l'utente è sulla pagina Regolamenti, non fare il computing, mostra e stop.
+if app_page == "📚 Regolamenti & Tariffe":
+    render_regolamento_page()
+    render_footer()
+    st.stop()
+    
 # ═══════════════════════════════════════════════════════════════════════════════
 # File uploaded — save temp + detect TOs
 # ═══════════════════════════════════════════════════════════════════════════════
