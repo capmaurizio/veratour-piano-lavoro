@@ -100,6 +100,12 @@ def render_regolamento_page():
         * **Maggiorazione Notturna (+15%):** Riconosciuta tra le **23:00 e le 05:00**, distribuita in bolletta anche sulle ore extra maturanti nella notte.
         * **Festività:** Nel giorno festivo lo stipendio base sale a € 40 netti (Junior) o € 50 netti (Senior). Inoltre il valore di ogni minuto extra lavorato subisce un rincaro del **+20%**.
         * **SAND:** Per voli SAND non maturano ore extra sui ritardi.
+        
+        > **💡 Esempio di calcolo Junior**: Turno feriale durata 4 ore (dalle 20:00 alle 24:00).
+        > * Base 3h: **€ 24,00**
+        > * Extra 1h: **€ 8,00**
+        > * Notturno (1 ora post-23:00): +15% su 8€ rateo h = **€ 1,20**
+        > * **Totale: € 33,20 netto forfait**
         """)
         
         st.divider()
@@ -108,6 +114,12 @@ def render_regolamento_page():
         st.markdown("""
         * **Eccezione Manuela Gregori:** Base fissa a corpo intero di **60€** a chiamata. Nessun extra per orario protratto prima del decollo; gli extra maturano **esclusivamente** sul reale "Ritardo ATD" pagati a **€ 12,00/h**. Notturno +20%, applicato anche in festività il +20%, calcolo addizionale Cassa INPS del **+4%**.
         * **Eccezione Martina Nettis:** Identificata a codice come *equiparata alla base Junior Bergamo* (24€ forfait, extra 8€/h, festivo +20%, Notturno +15%).
+        
+        > **💡 Esempio di calcolo (Manuela)**: Turno durato molto a lungo pre-partenza, poi ritardo ATD di 1 ora. Feriale diurno.
+        > * Base fissa: **€ 60,00** (nessun extra per la normale durata estesa del turno)
+        > * Ritardo ATD 1h: **€ 12,00**
+        > * INPS +4%: calcolata sul subtotale generato (72 * 4%) = **€ 2,88**
+        > * **Totale: € 74,88 lorde (P.IVA, no ritenuta)**
         """)
         
         st.divider()
@@ -118,6 +130,13 @@ def render_regolamento_page():
         * **Junior (es. Rita, Sara, Camilla):** Forfait contrattuale di **50€ lordi** in ritenuta d'acconto (equivalenti a circa 40€ netti). Le ore extra salgono a **€ 10,00 lorde**. Non matura doppio rimborso ritardo ATD. Notturno +15%.
         * **Senior (Standard):** Forfait di **56€ lordi** (equivalenti calcolati base 44,80 netti), extra € 12,00 lordi/h.
         * L'esportazione excel decurta il 20% ove previsto il regime di Ritenuta/Acconto e scompone i minuti extra su formula fissa per singolo assistente.
+        
+        > **💡 Esempio di calcolo (Junior)**: Rita fa turno Standard di 4 ore (Regime Ritenuta 20%).
+        > * Base lorda 3h: **€ 50,00**
+        > * Extra lordo 1h: **€ 10,00**
+        > * Subtotale lordo: **€ 60,00**
+        > * *Il simulatore esegue direttamente l'applicativo netto decurtando il 20%.*
+        > * **Totale simulato: € 48,00 netti.**
         """)
         
         st.divider()
@@ -126,6 +145,10 @@ def render_regolamento_page():
         st.markdown("""
         * **Logica a Blocchi:** Un turno standard è di 3 ore (Forfait € 56 lordo). Qualsiasi extra scatta esclusivamente per tranche intere da 3 ore (se si supera l'orario base).
         * **Notte Fissa:** Il notturno è un bonus forfettario rigido di **€ 11,20 lordi** e scatta se in turno si intercetta parzialmente la fascia 22:00-06:00.
+        
+        > **💡 Esempio di calcolo**: Turno durato in totale 4 ore e 30 minuti, orario diurno.
+        > * Superate le prime 3h, scatta l'intero blocco rigido del secondo turno (+3 ore).
+        > * Valutazione: 2 Blocchi base = **€ 56,00 x 2 = € 112,00 lordi**.
         """)
         
         st.divider()
@@ -136,6 +159,11 @@ def render_regolamento_page():
         * **Extra:** Rateo effettivo € 9,50 lordi / ora.
         * **Incentive:** Trattamento base innalzato a € 70,00 lordi e ore extra riconosciute a € 15,00/ora.
         * **Split Notturno:** Il calcolo divide puntualmente le ore notturne svolte **dentro al blocco base** (+15% applicato sui 53.6€ rateizzati per ora/minuto) e quelle **svolte nelle ore extra** (+15% applicato sui 9.5€).
+        
+        > **💡 Esempio di calcolo**: Turno Standard 3 ore totali diurne.
+        > * Base 2.5h: **€ 53,60**
+        > * Extra rata 30min: **€ 4,75** (la metà del valore orario).
+        > * **Totale: € 58,35 lordi**.
         """)
         
         st.divider()
@@ -146,6 +174,11 @@ def render_regolamento_page():
         * **Extra:** Valutati sugli sforamenti o ritardi a **€ 12,00 lordi/h**.
         * **Notturno:** Riconosciuto applicando **+15%** sull'equivalente orario.
         * **Festività:** Nel giorno festivo lo stipendio base e gli extra maturati ricevono una maggiorazione fissa a corpo del **+20%**.
+        
+        > **💡 Esempio di calcolo**: Turno diurno ferale di 4 ore.
+        > * Base 3h: **€ 60,00**
+        > * Extra 1h: **€ 12,00**.
+        > * **Totale: € 72,00 lordi**.
         """)
         
         st.divider()
@@ -155,6 +188,11 @@ def render_regolamento_page():
         * **Turno base:** Forfait di 3 ore valutate **€ 53,00 lorde**.
         * **Extra:** Valutati a **€ 12,00 lordi/h**.
         * **Notturno e Festivo:** Stesse regole tariffarie della fascia CTA (+15% notte, +20% nei giorni rossi).
+        
+        > **💡 Esempio di calcolo**: Turno diurno feriale di 3h e 30 minuti.
+        > * Base 3h: **€ 53,00**
+        > * Extra 30m: **€ 6,00** (rateo sui minuti effettivi).
+        > * **Totale: € 59,00 lordi**.
         """)
 
         st.divider()
