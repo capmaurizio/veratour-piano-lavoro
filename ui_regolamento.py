@@ -101,11 +101,17 @@ def render_regolamento_page():
         * **Festività:** Nel giorno festivo lo stipendio base sale a € 40 netti (Junior) o € 50 netti (Senior). Inoltre il valore di ogni minuto extra lavorato subisce un rincaro del **+20%**.
         * **SAND:** Per voli SAND non maturano ore extra sui ritardi.
         
-        > **💡 Esempio di calcolo Junior**: Turno feriale durata 4 ore (dalle 20:00 alle 24:00).
-        > * Base 3h: **€ 24,00**
-        > * Extra 1h: **€ 8,00**
-        > * Notturno (1 ora post-23:00): +15% su 8€ rateo h = **€ 1,20**
-        > * **Totale: € 33,20 netto forfait**
+        > **💡 Junior (Feriale)**: Turno durata 4 ore (dalle 20:00 alle 24:00).
+        > * Base 3h: **€ 24,00** | Extra 1h: **€ 8,00** | Notte (1h post-23:00): +15% su 8€ = **€ 1,20** | **Totale: € 33,20 netto**
+        >
+        > **💡 Junior (Festivo)**: Stesso turno di 4 ore ma in giorno Festivo rosso sul calendario.
+        > * Base 3h: sale a **€ 40,00** | Extra 1h: **€ 9,60** (+20%) | Notte (1h post-23:00 su 9.60€): **€ 1,44** | **Totale: € 51,04 netto**
+        >
+        > **💡 Senior (Feriale)**: Filippo Bonfanti, 4 ore (dalle 20:00 alle 24:00).
+        > * Base 3h: **€ 30,00** | Extra 1h: **€ 10,00** | Notte (1h post-23:00): +15% su 10€ = **€ 1,50** | **Totale: € 41,50 netto**
+        >
+        > **💡 Senior (Festivo)**: Filippo Bonfanti, 4 ore in Festivo.
+        > * Base 3h: sale a **€ 50,00** | Extra 1h: **€ 12,00** (+20%) | Notte: ristima proporzionale **€ 1,80** | **Totale: € 63,80 netto**
         """)
         
         st.divider()
@@ -115,11 +121,11 @@ def render_regolamento_page():
         * **Eccezione Manuela Gregori:** Base fissa a corpo intero di **60€** a chiamata. Nessun extra per orario protratto prima del decollo; gli extra maturano **esclusivamente** sul reale "Ritardo ATD" pagati a **€ 12,00/h**. Notturno +20%, applicato anche in festività il +20%, calcolo addizionale Cassa INPS del **+4%**.
         * **Eccezione Martina Nettis:** Identificata a codice come *equiparata alla base Junior Bergamo* (24€ forfait, extra 8€/h, festivo +20%, Notturno +15%).
         
-        > **💡 Esempio di calcolo (Manuela)**: Turno durato molto a lungo pre-partenza, poi ritardo ATD di 1 ora. Feriale diurno.
-        > * Base fissa: **€ 60,00** (nessun extra per la normale durata estesa del turno)
-        > * Ritardo ATD 1h: **€ 12,00**
-        > * INPS +4%: calcolata sul subtotale generato (72 * 4%) = **€ 2,88**
-        > * **Totale: € 74,88 lorde (P.IVA, no ritenuta)**
+        > **💡 Manuela Eccezione (Feriale con Ritardo)**: Turno diurno feriale, si protrae poi subisce un Ritardo ATD di 1 ora.
+        > * Base: **€ 60,00** | Extra ATD 1h: **€ 12,00** | Subtotale 72,00 | + 4% INPS (**€ 2,88**) | **Totale: € 74,88 lordo**
+        >
+        > **💡 Manuela Eccezione (Festivo Standard)**: Turno senza ritardo, diurno ma scatta la festività.
+        > * Base: **€ 60,00** (+20% festivo globale sulle basi) = **€ 72,00** | + 4% INPS (**€ 2,88**) | **Totale: € 74,88 lordo**
         """)
         
         st.divider()
@@ -130,13 +136,16 @@ def render_regolamento_page():
         * **Junior (es. Rita, Sara, Camilla):** Forfait contrattuale di **50€ lordi** in ritenuta d'acconto (equivalenti a circa 40€ netti). Le ore extra salgono a **€ 10,00 lorde**. Non matura doppio rimborso ritardo ATD. Notturno +15%.
         * **Senior (Standard):** Forfait di **56€ lordi** (equivalenti calcolati base 44,80 netti), extra € 12,00 lordi/h.
         * L'esportazione excel decurta il 20% ove previsto il regime di Ritenuta/Acconto e scompone i minuti extra su formula fissa per singolo assistente.
+        * **Festivi:** In caso di festivo l'intero lordo maturato è maggiorato in automatico del **+20%**.
         
-        > **💡 Esempio di calcolo (Junior)**: Rita fa turno Standard di 4 ore (Regime Ritenuta 20%).
-        > * Base lorda 3h: **€ 50,00**
-        > * Extra lordo 1h: **€ 10,00**
-        > * Subtotale lordo: **€ 60,00**
-        > * *Il simulatore esegue direttamente l'applicativo netto decurtando il 20%.*
-        > * **Totale simulato: € 48,00 netti.**
+        > **💡 NAP Junior (Feriale)**: Rita turno Standard di 4 ore diurno (Ritenuta 20%).
+        > * Base 3h: **€ 50,00 lordi** | Extra 1h: **€ 10,00 lordi** | Subtotale **60€ lordi** | Simulato al netto **(-20%) = € 48,00 netti**.
+        > 
+        > **💡 NAP Junior (Festivo)**: Rita turno Standard in giornata festiva rosa sul calendario.
+        > * Subtotale base 60€ riceve subito il **+20%** festività diventando **€ 72,00 lordi**. | Simulato netto **(-20%) = € 57,60 netti**.
+        >
+        > **💡 NAP Senior (Feriale)**: Giorno feriale 4 ore diurne per tariffa base.
+        > * Base 3h: **€ 56,00 lordi** | Extra 1h: **€ 12,00 lordi** | Subtotale **68€ lordi** | Simulato netto **(-20%) = € 54,40 netti**.
         """)
         
         st.divider()
@@ -146,9 +155,13 @@ def render_regolamento_page():
         * **Logica a Blocchi:** Un turno standard è di 3 ore (Forfait € 56 lordo). Qualsiasi extra scatta esclusivamente per tranche intere da 3 ore (se si supera l'orario base).
         * **Notte Fissa:** Il notturno è un bonus forfettario rigido di **€ 11,20 lordi** e scatta se in turno si intercetta parzialmente la fascia 22:00-06:00.
         
-        > **💡 Esempio di calcolo**: Turno durato in totale 4 ore e 30 minuti, orario diurno.
+        > **💡 Turno VRN (Feriale)**: Turno terminato alle 23:30 (durata 4 ore e 30 minuti).
         > * Superate le prime 3h, scatta l'intero blocco rigido del secondo turno (+3 ore).
         > * Valutazione: 2 Blocchi base = **€ 56,00 x 2 = € 112,00 lordi**.
+        > * Bonus notte toccata a fine turno feriale: **+ € 11,20 lordi**. | Totale **123,20€ lordi**.
+        >
+        > **💡 Turno VRN (Festivo)**: Stesso turno di 4 ore e 30 in giorno festivo
+        > * Subtotale lordo cumulato 123,20 riceve maggiorazione festiva integrale del **+20%**. | Totale **147,84€ lordi**.
         """)
         
         st.divider()
