@@ -31,7 +31,7 @@ def get_assigned_rule(apt: str, name: str, categoria: str) -> str:
         return "VRN a Scalini (Junior 50€/3h o Senior 58€/3h, scalini da +12€/ora, Notturno +15%)"
         
     elif apt_upper == 'FCO':
-        return "FCO Standard (Base 53.6€/2.5h, Extra 9.5€/h, Incentive 70€/2.5h, Notturno Split 22:00-06:00)"
+        return "FCO Standard (Forfait 56€/2h30, Extra 12€/h, Notturno Split +20% 23:00-06:00)"
         
     elif apt_upper in ['CTA', 'TRN', 'PMO', 'PSA']:
         return f"{apt_upper} Standard (Base 60€/3h, Extra 12€/h, Notturno +15%, Festivo +20%)"
@@ -196,16 +196,26 @@ def render_regolamento_page():
 
         st.subheader("Roma (FCO)")
         st.markdown("""
-        * **Turno base:** 2 ore e 30 min (150 min) a **€ 53,60 lordi**.
-        * **Extra:** Rateo effettivo € 9,50 lordi / ora.
-        * **Incentive:** Trattamento base innalzato a € 70,00 lordi e ore extra riconosciute a € 15,00/ora.
-        * **Split Notturno:** Il calcolo divide puntualmente le ore notturne svolte **dentro al blocco base** (+15% applicato sui 53.6€ rateizzati per ora/minuto) e quelle **svolte nelle ore extra** (+15% applicato sui 9.5€).
+        * **Turno base (Forfait):** Euro **56,00 lorde** per 2 ore e 30 minuti (2h30). L'equivalente orario è 22,40 €/h.
+        * **Extra:** Rateo effettivo **€ 12,00 lordi/h**. Il tempo successivo alle 2h30 è matematicamente considerato ora extra.
+        * **Maggiorazione Notturna (Regola B):** Scatta al +20% (fascia 23:00-06:00 / SAND 23:00-03:30). La piattaforma calcola separatamente:
+            * Sulle ore notturne svolte *dentro le 2h30 di base*, paga +4,48 €/h di maggiorazione (22,40 x 20%).
+            * Sulle ore notturne svolte *negli extra*, paga +2,40 €/h (12,00 x 20%) da sommarsi ai 12 € che riceve già come extra diurno.
         
-        > **💡 Esempio di calcolo**: Turno Standard 3 ore totali diurne.
-        > * Base 2.5h: **€ 53,60**
-        > * Extra rata 30min: **€ 4,75** (la metà del valore orario).
-        > * **Totale: € 58,35 lordi**.
+        > **💡 Turno FCO Pratico**: Caso Baobab / TH (03:10 - 06:33).
+        > * Turno base 2h30 forfait -> **€ 56,00**
+        > * Extra 53/60 min (dalle 05:40 alle 06:33) x 12,00 -> **€ 10,60**
+        > * Maggiorazione Notturna (su 2h30 forfait piene in notturna) x 4,48 -> **€ 11,20**
+        > * Magg. Extra Notturni (20/60 min da 5:40 a 6:00) x 2,40 -> **€ 0,80**
+        > * **Totale complessivo:** 56,00 + 10,60 + 11,20 + 0,80 = **€ 78,60 lordi**.
         """)
+        
+        with st.expander("🍎 Spiegazione Semplice (per i non addetti ai lavori)"):
+            st.markdown("""
+            A Fiumicino, il cesto piccolo del fruttivendolo ha **2,5 mele** in totale e ti costa fisso **56 €**.
+            E se vuoi comprare mele in abbondanza? Nessun problema, ogni mela sfusa in più te la vende a **12 €**. 
+            Essendo aeroporto, lui vende anche di notte (dalle 23:00 alle 06:00): ma di notte è costretto a mettere un rincaro del 20% *solo sulle frazioni in cui acquisti col buio*. Se compravi il cesto fisso di notte paghi la tassa sulla base (+4,48 a mela), se aggiungevi mele sfuse di notte paghi la tassa sugli extra sfusi (+2,40 a mela). Tutto viene spezzato al centesimo minuto dal simulatore per non confondersi!
+            """)
         
         st.divider()
 
