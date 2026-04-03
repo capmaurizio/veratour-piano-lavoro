@@ -791,10 +791,12 @@ def calcola_tariffa_collaboratore(
         VRN_SENIOR = {
             'ROSITA CAVALLARO', 'EMANUELA MONESE', 'ALESSANDRA CONSOLINI',
             'CAVALLARO ROSITA', 'MONESE EMANUELA', 'CONSOLINI ALESSANDRA',
+            'MANUELA MONESE', 'MONESE MANUELA', 'MANUELA EMONESE', 'EMONESE MANUELA'
         }
         VRN_JUNIOR = {
             'SAVERIO BONINI', 'LUCA DE LAURENTIS', 'LUCA TOSONI', 'MARTA LUCCHETTI',
             'BONINI SAVERIO', 'DE LAURENTIS LUCA', 'TOSONI LUCA', 'LUCCHETTI MARTA',
+            'ORIANA IPPOLITO', 'AMELIA GIORDANO', 'IPPOLITO ORIANA', 'GIORDANO AMELIA'
         }
         
         nome_upper = nome.upper().strip() if nome else ''
@@ -819,16 +821,8 @@ def calcola_tariffa_collaboratore(
                 is_senior = True
         
         # Regime fiscale hardcoded per VRN (Accordo 2026)
-        # Senior: tutte con Partita IVA
-        # Junior Bonini: Partita IVA
-        # Junior De Laurentis, Tosoni, Lucchetti: occasionali con ritenuta d'acconto 20%
-        if is_senior:
-            regime_override = 'Partita IVA'
-        elif nome_upper in {'SAVERIO BONINI', 'BONINI SAVERIO'}:
-            regime_override = 'Partita IVA'
-        else:
-            # De Laurentis, Tosoni, Lucchetti: occasionali, ritenuta 20%
-            regime_override = "Ritenuta d'acconto"
+        # SIA Senior CHE Junior: tutte con Partita IVA
+        regime_override = 'Partita IVA'
         
         # SAND: regole specifiche (no extra, SÌ notturno 23:00-03:30)
         to_upper = str(tour_operator).upper().strip() if tour_operator else ''
