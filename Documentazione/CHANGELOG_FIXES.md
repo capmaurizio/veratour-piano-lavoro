@@ -4,6 +4,37 @@ Questo file documenta le correzioni e le modifiche significative apportate al si
 
 ---
 
+## [2026-04-03] Creazione Cruscotto Amministrativo (UI Regolamenti & Tariffe)
+
+**File creati/modificati**:
+- `ui_regolamento.py` (Nuovo modulo)
+- `app_streamlit.py`
+- `ui_styles.py`
+
+### Riepilogo Intervento Strutturale
+Al fine di garantire trasparenza amministrativa e permettere a chiunque (anche personale non tecnico) di leggere e comprendere le logiche di calcolo del simulatore, è stata creata un'intera pagina dedicata all'interno dell'applicativo Streamlit.
+
+1. **Dashboard Dinamico Collaboratori**: 
+   - Costruzione di una tabella che estrae a runtime i dati dal file `tariffe_collaboratori.xlsx`.
+   - Ad ogni collaboratore viene stampata visivamente la regola esatta assegnata al simulatore (es. BGY Junior vs MXP Eccezione).
+
+2. **Dettaglio Tariffe (Schede Operative Integrate)**:
+   - Traduzione per tutti gli aeroporti (BGY, MXP, NAP, VRN, FCO, CTA, PMO, TRN, PSA, BRI, BLQ, VCE, TSF, CAG) del codice crudo Python in regole descrittive scritte in "lingua umana".
+   - **VRN (Verona)**: Allineata la documentazione per rispecchiare la logica a scalini (Pacchetto Junior da 50€ e Senior da 58€, non spezzabile).
+   - **FCO (Roma)**: Allineata la visualizzazione al listino operativo confermando matematicamente il Forfait Base di 56€ (22,40€/h) e lo split notturno separato (forfait vs extra).
+
+3. **Esempi Pratici e Simulazioni Teoriche**:
+   - Accompagnato ogni hub tariffario aeroportuale con casistiche differenziate (Feriale / Festivo / Regimi Ritenuta / Regimi P.IVA lordi), permettendo al lettore di capire come si scorporano lordi, netti, extra e le percentuali notturne (15% standard vs 20% Roma/Malpensa/Isole festivo).
+
+4. **Metafore Elementari (Il paradigma "LEGO" per la Prima Elementare)**:
+   - È stato introdotto un menù a tendina rosa per ogni scalo denominato *"🧸 Spiegato a un bambino di Prima Elementare (I Mattoncini LEGO)"*.
+   - Il fine è di tradurre la logica fiscale ("ritenute", "tranche indivisibili", "split notturno maggiorato") in concetti ludici legati ai mattoncini Lego ("scatole fisse", "fatine delle tasse", "mattoncini extra").
+   
+5. **Modifiche CSS Architetturali**:
+   - Sbloccato il container della UI Streamlit in `ui_styles.py`, innalzando il `max-width` da 960px limitanti agli attuali `1400px` ultra-wide, in modo che l'amministratore consulti la dashboard a tutto schermo senza troncature testuali.
+
+---
+
 ## [2026-04-03] Allineamento massivo Regole Operative 2026 (10 Aeroporti)
 
 A seguito di un audit approfondito sulle direttive 2026 sono state perfezionate e validate le normative dei seguenti aeroporti. Tutto il codice lato fallback generici, template e calcoli specifici (`tariffe_collaboratori.py` e `app_assistenti.py`) è ora al 100% conforme.
