@@ -466,6 +466,19 @@ def genera_template_assistente(
                     tariffa_extra_h = 12.0  # NAP meet&greet: €12/h Senior
                 elif apt_del_turno == 'NAP' and 'TRANSFER' in tipo_servizio_del_turno:
                     tariffa_extra_h = 12.0  # NAP transfer: €12/h Senior
+                    
+            # Aggiustamento Festivo BGY: +20% sulle ore extra
+            if apt_del_turno == 'BGY':
+                try:
+                    from tariffe_collaboratori import get_italian_holidays_2025
+                    festivi = get_italian_holidays_2025()
+                    data_val = row_piano.get('DATA', None)
+                    if data_val:
+                        dt = pd.to_datetime(data_val, dayfirst=True).date() if isinstance(data_val, str) else pd.to_datetime(data_val).date()
+                        if dt in festivi:
+                            tariffa_extra_h = tariffa_extra_h * 1.20
+                except:
+                    pass
             
             if modulo_calcolo and hasattr(modulo_calcolo, 'genera_formula_excel_extra'):
                 import inspect

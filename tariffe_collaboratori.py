@@ -686,8 +686,8 @@ def calcola_tariffa_collaboratore(
     # 1. BGY – Tariffe Standard e Festive (REGOLE OPERATIVE BGY 2026)
     # ─────────────────────────────────────────────────────────────────
     # TUTTE le tariffe BGY sono già espresse in NETTI → nessuno scorporo da applicare.
-    # Junior (chiamata/ritenuta): €24,00 netti/h × 3h = €72 netti base
-    # Senior (chiamata):          €30,00 netti/h × 3h = €90 netti base
+    # Junior (chiamata/ritenuta): €24,00 netti per 3h (8€/h)
+    # Senior (es. Filippo):       €30,00 netti per 3h (10€/h)
     # Extra Junior: €8,00 netti/h | Extra Senior: €10,00 netti/h
     # Festivo Junior forfettario: €40 netti/3h | Festivo Senior: €50 netti/3h
     # Notturno: +15% (fascia 23:00-05:00)
@@ -716,11 +716,14 @@ def calcola_tariffa_collaboratore(
             # Extra ore oltre 3h (SAND: no extra)
             if is_sand_bgy:
                 extra_bgy = 0.0
+                extra_eur_festivo = extra_eur_per_h_bgy
             else:
+                # Nei festivi BGY le ore extra sono maggiorate del +20%
+                extra_eur_festivo = extra_eur_per_h_bgy * 1.20
                 ore_extra_bgy = max(0, durata_h_bgy - durata_base_h_bgy)
-                extra_bgy = ore_extra_bgy * extra_eur_per_h_bgy
+                extra_bgy = ore_extra_bgy * extra_eur_festivo
                 if extra_min > 0:
-                    extra_bgy += (extra_min / 60.0) * extra_eur_per_h_bgy
+                    extra_bgy += (extra_min / 60.0) * extra_eur_festivo
 
             # Notturno +15% (BGY: 23:00-05:00)
             # Distingue minuti nel forfait base vs nelle ore extra
@@ -733,7 +736,7 @@ def calcola_tariffa_collaboratore(
                     val_ora_base = base_eur_bgy / durata_base_h_bgy  # €13.33 o €16.67/h
                     notte_bgy = (
                         (min_nott_base / 60.0) * val_ora_base * 0.15
-                        + (min_nott_extra / 60.0) * extra_eur_per_h_bgy * 0.15
+                        + (min_nott_extra / 60.0) * extra_eur_festivo * 0.15
                     )
                 else:
                     val_ora_base = base_eur_bgy / durata_base_h_bgy
@@ -751,7 +754,7 @@ def calcola_tariffa_collaboratore(
             }
         else:
             # ── STANDARD BGY (non festivo) ──────────────────────────────
-            base_eur_bgy = 90.0 if is_senior_bgy else 72.0  # €30×3h o €24×3h netti
+            base_eur_bgy = 30.0 if is_senior_bgy else 24.0  # forfait 3h netti
 
             # Extra (ore oltre 3h + ritardi ATD) — SAND: no extra
             if is_sand_bgy:
@@ -764,7 +767,7 @@ def calcola_tariffa_collaboratore(
 
             # Notturno +15% (BGY: 23:00-05:00)
             if minuti_notturni > 0:
-                val_ora_bgy = base_eur_bgy / durata_base_h_bgy  # €24 o €30/h
+                val_ora_bgy = base_eur_bgy / durata_base_h_bgy  # €10 o €8/h
                 notte_bgy = (minuti_notturni / 60.0) * val_ora_bgy * 0.15
             else:
                 notte_bgy = 0.0
