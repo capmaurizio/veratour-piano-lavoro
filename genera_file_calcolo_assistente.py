@@ -133,19 +133,19 @@ def calcola_tariffa_turno(
     elif apt_upper == 'NAP' and tipo_servizio == 'transfer':
         base_eur = 50.0
         durata_base_h = 2.5
-        extra_eur_per_h = 12.0  # Senior transfer
+        extra_eur_per_h = 12.0
         notturno_perc = 0.15
     # NAP - Tariffe Arrivi (Meet & Greet)
     elif apt_upper == 'NAP' and tipo_servizio == 'arrivi':
         base_eur = 56.0
         durata_base_h = 2.5
-        extra_eur_per_h = 12.0  # Senior meet&greet
+        extra_eur_per_h = 12.0
         notturno_perc = 0.15
-    # NAP - Tariffe Standard Senior (Accordo NAP 2026)
+    # NAP - Tariffe Standard Unificate (Accordo NAP 2026)
     elif apt_upper == 'NAP':
-        base_eur = 56.0   # Senior: €56/3h  (Junior: €50/3h - modificare se junior)
-        durata_base_h = 3.0
-        extra_eur_per_h = 12.0  # Senior: €12/h  (Junior: €10/h - modificare se junior)
+        base_eur = 56.0
+        durata_base_h = 2.5
+        extra_eur_per_h = 12.0
         notturno_perc = 0.15  # +15% NAP
     # REGOLE STANDARD per altri aeroporti
     else:

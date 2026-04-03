@@ -1047,47 +1047,11 @@ def calcola_tariffa_collaboratore(
     # Transfer Veratour: €50, Meet&Greet altri TO: €56
     # Incentive (Iantra): €60/2h30' + extra €15/h
     if apt_upper == 'NAP' and (tipo_servizio is None or tipo_servizio == '' or tipo_servizio == 'standard'):
-        # Classificazione Junior/Senior per nome assistente
-        NAP_SENIOR = {
-            'PAOLO IMPERATO', 'ROBERTA CASCIELLO', 'ANGELA DI GIORGIO',
-            'IMPERATO PAOLO', 'CASCIELLO ROBERTA', 'DI GIORGIO ANGELA',
-        }
-        NAP_JUNIOR = {
-            'CAMILLA MIGNOGNA', 'SARA MERENDA', 'RITA ORSO',
-            'MIGNOGNA CAMILLA', 'MERENDA SARA', 'ORSO RITA',
-        }
-        
-        nome_upper = nome.upper().strip() if nome else ''
-        
-        # Determina Junior/Senior
-        is_senior = False
-        is_junior = False
-        if nome_upper in NAP_SENIOR:
-            is_senior = True
-        elif nome_upper in NAP_JUNIOR:
-            is_junior = True
-        else:
-            # Fallback: usa categoria dal file Excel
-            categoria = tariffa.categoria if tariffa else None
-            categoria_str = str(categoria).strip().upper() if categoria else ''
-            if 'SENIOR' in categoria_str:
-                is_senior = True
-            elif 'JUNIOR' in categoria_str or 'YUNIOR' in categoria_str:
-                is_junior = True
-            else:
-                is_senior = True  # Default prudenziale
-        
-        # NAP tariffe differenziate Junior/Senior (Accordo 2026)
-        # Junior: €50/3h, extra €10/h
-        # Senior: €56/3h, extra €12/h
-        if is_junior:
-            base_eur = 50.0
-            durata_base_h = 3.0
-            extra_eur_per_h = 10.0
-        else:  # Senior
-            base_eur = 56.0
-            durata_base_h = 3.0
-            extra_eur_per_h = 12.0
+        # NAP Tariffe Standard unificate (Accordo NAP 2026) per Senior e Junior
+        # Base: €56/2h30', extra €12/h
+        base_eur = 56.0
+        durata_base_h = 2.5
+        extra_eur_per_h = 12.0
         notturno_perc = 0.15  # +15%
         festivo_perc = 0.20   # +20%
         
@@ -1200,23 +1164,10 @@ def calcola_tariffa_collaboratore(
     
     # 4. NAP - Tariffe Transfer (Accordo NAP 2026)
     if apt_upper == 'NAP' and tipo_servizio and 'transfer' in str(tipo_servizio).lower():
-        # Transfer: Junior €45 (Veratour), Senior €50 (Veratour)
-        # Classificazione Junior/Senior per nome
-        NAP_JUNIOR_NAMES = {
-            'CAMILLA MIGNOGNA', 'SARA MERENDA', 'RITA ORSO',
-            'MIGNOGNA CAMILLA', 'MERENDA SARA', 'ORSO RITA',
-        }
-        nome_upper = nome.upper().strip() if nome else ''
-        categoria = tariffa.categoria if tariffa else None
-        categoria_str = str(categoria).strip().upper() if categoria else ''
-        is_junior = nome_upper in NAP_JUNIOR_NAMES or 'JUNIOR' in categoria_str or 'YUNIOR' in categoria_str
-        
-        if is_junior:
-            base_eur = 45.0  # Junior transfer
-            extra_eur_per_h = 10.0
-        else:
-            base_eur = 50.0  # Senior transfer
-            extra_eur_per_h = 12.0
+        # Transfer unificato (Accordo NAP 2026) per Senior e Junior
+        # Forfettario €50, extra €12/h
+        base_eur = 50.0
+        extra_eur_per_h = 12.0
         durata_base_h = 0.0  # Forfettaria, non ha durata base fissa
         notturno_perc = 0.15  # +15%
         festivo_perc = 0.20  # +20%
@@ -1270,22 +1221,10 @@ def calcola_tariffa_collaboratore(
     
     # 5. NAP - Tariffe Arrivi/Meet&Greet (Accordo NAP 2026)
     if apt_upper == 'NAP' and tipo_servizio and ('arrivi' in str(tipo_servizio).lower() or 'meet' in str(tipo_servizio).lower()):
-        # Arrivi/Meet&Greet: Junior €48, Senior €56
-        NAP_JUNIOR_NAMES = {
-            'CAMILLA MIGNOGNA', 'SARA MERENDA', 'RITA ORSO',
-            'MIGNOGNA CAMILLA', 'MERENDA SARA', 'ORSO RITA',
-        }
-        nome_upper = nome.upper().strip() if nome else ''
-        categoria = tariffa.categoria if tariffa else None
-        categoria_str = str(categoria).strip().upper() if categoria else ''
-        is_junior = nome_upper in NAP_JUNIOR_NAMES or 'JUNIOR' in categoria_str or 'YUNIOR' in categoria_str
-        
-        if is_junior:
-            base_eur = 48.0   # Junior meet&greet
-            extra_eur_per_h = 10.0
-        else:
-            base_eur = 56.0   # Senior meet&greet
-            extra_eur_per_h = 12.0
+        # Arrivi/Meet&Greet unificato (Accordo NAP 2026) per Senior e Junior
+        # Base €56/2h30', extra €12/h
+        base_eur = 56.0
+        extra_eur_per_h = 12.0
         durata_base_h = 2.5
         notturno_perc = 0.15  # +15%
         festivo_perc = 0.20   # +20%
