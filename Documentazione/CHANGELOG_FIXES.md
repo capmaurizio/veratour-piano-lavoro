@@ -4,6 +4,42 @@ Questo file documenta le correzioni e le modifiche significative apportate al si
 
 ---
 
+## [2026-04-03] Allineamento massivo Regole Operative 2026 (10 Aeroporti)
+
+A seguito di un audit approfondito sulle direttive 2026 sono state perfezionate e validate le normative dei seguenti aeroporti. Tutto il codice lato fallback generici, template e calcoli specifici (`tariffe_collaboratori.py` e `app_assistenti.py`) è ora al 100% conforme.
+
+### 1. Verona (VRN)
+* **Status**: 🔴 *Fixato* (Commit `6ca0610`)
+* **Regime P.IVA Unificato**: Eliminato lo "scorporo in ritenuta del 20%" che il sistema forzava per i Junior (De Laurentis, Tosoni, ecc.). Ora *tutti* (Senior e Junior) operano in codice "Partita IVA" per emettere gli importi pattuiti immutati.
+* **Aggiornamento Nomi**: Aggiunte `Amelia Giordano` e `Oriana Ippolito` (Junior). Aggiunte varianti anti-typo come `Emanuela Monese` e `Manuela Emonese` (Senior).
+* **Confermati**: Pacchetti crescenti base, differentiale `+30min` ATD Alpitour. Extra disabilitati su SAND.
+
+### 2. Napoli (NAP)
+* **Status**: 🔴 *Fixato* (Commit `c1138bf`)
+* **Abolizione Distinzione Senior/Junior**: Abbattuti gli scaglioni preesistenti, tutti convogliano sotto Base **€56.00** ed Extra **€12.00/h**.
+* **Durata Normalizzata**: Tarato forzatamente a **2.5 ore** (2h30') il limite base partenze.
+* **Transfer e Arrivi**: Unificati a **€50.00** forfettari i Transfer per tutti ed a **€56.00** le tariffe standard Meet & Greet Arrivi.
+* **Controllo Ritenuta**: Testato esito corretto, dove la logica scala in automatico il `-20%` ai Junior non aventi P.IVA (es. Camilla Mignogna).
+
+### 3. Catania (CTA), Palermo (PMO), Pisa (PSA)
+* **Status**: 🔴 *Fixato* (Commit `019a09d`)
+* **Nuova Base Standalone**: Agganciati questi scali ad un tier di *fallback* per emettere rigidamente **€60.00** per 3 ore (suscettibili al calcolo ritenute come in Palermo).
+* **Fix Bug Notturno**: Scoperto file generatore che fallava in `+20%` il notturno per tutti i tier extra-FCO e NAP. Ripristinato il default corretto dell'accordo a **+15%**.
+
+### 4. Bari (BRI), Bologna (BLQ)
+* **Status**: 🔴 *Fixato* (Commit `019a09d`)
+* **Nuova Base Standalone**: Le logiche base restituiscono in automatico ai turni il valore di **€53.00** per 3 ore. Extra a €12 e Notturno +15%.
+
+### 5. Roma Fiumicino (FCO)
+* **Status**: ✅ *Verificato, Nessuna modifica*
+* Il sistema copriva la distinzione. Confermati l'esenzione ritenuta da P.IVA, Incentive a €60, notturno FCO "Splittato" e +20% addizionale/Festività (San Pietro e Paolo confermato).
+
+### 6. Venezia (VCE), Treviso (TSF)
+* **Status**: ✅ *Verificato, Nessuna modifica*
+* Gestiti dinamicamente via CVC senza fallback hard-coded, estraggono dai file di database base, extra e durata con i modificatori corretti (notturno % variabile a TO, ext/min).
+
+---
+
 ## [2026-04-03] Fix 7 bug critici BGY — Regole Operative Bergamo 2026
 
 **File modificati**:
