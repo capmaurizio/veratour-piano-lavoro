@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from tariffe_collaboratori import TARIFFARIO_MANAGER
+from tariffe_collaboratori import get_tariffe_manager
 
 def get_assigned_rule(apt: str, name: str, categoria: str) -> str:
     """Ritorna una stringa human-readable che descrive la regola applicata."""
@@ -52,8 +52,9 @@ def render_regolamento_page():
         st.subheader("Elenco Collaboratori e Regole Assegnate")
         st.markdown("Questa tabella carica tutti i collaboratori iscritti su file Excel `tariffe_collaboratori.xlsx` e indica quale logica tariffaria applicherà automaticamente il simulatore secondo le regole impostate ad Aprile 2026.")
         
-        # Recupera la lista dal TARIFFARIO_MANAGER
-        all_collabs = sorted(TARIFFARIO_MANAGER.tariffe.values(), key=lambda x: (x.aeroporto, x.nome))
+        # Recupera la lista dal manager singleton
+        tm = get_tariffe_manager()
+        all_collabs = sorted(tm.tariffe.values(), key=lambda x: (x.aeroporto, x.nome))
         
         data = []
         for c in all_collabs:
