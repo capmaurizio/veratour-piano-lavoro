@@ -395,6 +395,12 @@ def detect_columns(df: pd.DataFrame) -> Dict[str, Optional[str]]:
         "compagnia": find_col(df, [r"^COMPAGNIA$", r"^AIRLINE$", r"\bCOMPAGNIA\s*AEREA\b", r"\bAIRLINE\b"]),  # Per rilevare compagnia aerea
         "apt": find_col(df, [r"^APT$", r"\bAEROPORTO\b", r"\bSCALO\b"]),
         "turno": find_col(df, [r"^TURNO$", r"^TURNO\s*ASSISTENTE$", r"\bTURNI\b"]),
+        # Nuovo modello 2026: colonne Inizio Turno / Fine turno / Agenzia / Servizio
+        "inizio_turno":  find_col(df, [r"inizio\s*turno", r"^inizio$"]),
+        "fine_turno":    find_col(df, [r"fine\s*turno"]),
+        "convocazione":  find_col(df, [r"^convocazione", r"^conv"]),
+        "agenzia":       find_col(df, [r"^agenzia$"]),
+        "servizio":      find_col(df, [r"^servizio$", r"^servizi$"]),
         "atd": find_col(df, [r"^ATD$", r"\bORARIO\s*ATD\b"]),
         "std": find_col(df, [r"^STD$", r"\bORARIO\s*STD\b"]),
         "importo": find_col(df, [r"^IMPORTO$", r"\bTOTALE\b", r"^COSTO\s*$"]),
@@ -478,7 +484,9 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
             cols = detect_columns(sdf)
 
             # Minimal cols required
-            if not cols["data"] or not cols["apt"] or not cols["turno"]:
+            # Minimal cols: DATA+APT sempre + schema orario (nuovo 2026 o vecchio TURNO)
+            has_orario = (cols.get("inizio_turno") and cols.get("fine_turno")) or cols.get("turno")
+            if not cols["data"] or not cols["apt"] or not has_orario:
                 continue
 
             # Filter TO if present
@@ -513,6 +521,113 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
             sdf["__sheet_row_order"] = np.arange(len(sdf), dtype=int)
             sdf["__global_order"] = np.arange(global_order, global_order + len(sdf), dtype=int)
             global_order += len(sdf)
+            # ── NUOVO FORMATO 2026 (Inizio Turno + Fine turno) ──────────────
+            # Se rilevato il nuovo formato, processa il blocco e fa continue.
+            # Se non rilevato, il vecchio codice TURNO sotto gestisce il file.
+            if cols.get("inizio_turno") and cols.get("fine_turno"):
+                _inizio_c = cols["inizio_turno"]
+                _fine_c   = cols["fine_turno"]
+                _to_c     = cols.get("tour_operator")
+                _ass_c    = cols.get("assistente")
+                _std_c    = cols.get("std")
+
+                def _ss(v, _pd=pd):
+                    try: s = "" if _pd.isna(v) else str(v).strip()
+                    except: s = str(v).strip() if v is not None else ""
+                    return "" if s.lower() in ("nan","none") else s
+
+                sdf["__to_s"]  = sdf[_to_c].apply(_ss) if _to_c else ""
+                sdf["__as_s"]  = sdf[_ass_c].apply(_ss) if _ass_c else ""
+                sdf["__gk"]    = (sdf["__date"].astype(str)+"|"+sdf["__to_s"]+"|"+
+                                  sdf[cols["apt"]].apply(_ss)+"|"+sdf["__as_s"])
+
+                sdf["__ini_f"] = sdf[_inizio_c].replace("", np.nan)
+                sdf["__fin_f"] = sdf[_fine_c].replace("", np.nan)
+                sdf["__ini_f"] = sdf.groupby("__gk")["__ini_f"].ffill()
+                sdf["__fin_f"] = sdf.groupby("__gk")["__fin_f"].ffill()
+                sdf = sdf[sdf["__ini_f"].notna() & sdf["__fin_f"].notna()].copy()
+
+                if not sdf.empty:
+                    def _ptc(v):
+                        try:
+                            if pd.isna(v): return None
+                        except: pass
+                        if hasattr(v, "total_seconds"):
+                            ts = int(v.total_seconds())
+                            return (ts // 3600, (ts % 3600) // 60)
+                        return parse_time_value(v)
+
+                    sdf["__shm"] = sdf["__ini_f"].apply(_ptc)
+                    sdf["__ehm"] = sdf["__fin_f"].apply(_ptc)
+                    sdf = sdf[sdf["__shm"].notna() & sdf["__ehm"].notna()].copy()
+
+                    if not sdf.empty:
+                        sdf["__start_dt"] = sdf.apply(lambda r: to_dt(r["__date"],f"{r['__shm'][0]:02d}:{r['__shm'][1]:02d}"),axis=1)
+                        sdf["__end_dt"]   = sdf.apply(lambda r: to_dt(r["__date"],f"{r['__ehm'][0]:02d}:{r['__ehm'][1]:02d}"),axis=1)
+                        ov = sdf["__end_dt"] < sdf["__start_dt"]
+                        sdf.loc[ov,"__end_dt"] += pd.Timedelta(days=1)
+
+                        _fv_c = cols.get("festivo")
+                        sdf["__festivo"] = sdf[_fv_c].apply(is_truthy_festivo) if _fv_c else False
+                        _pi_c = cols.get("importo"); _pe_c = cols.get("ore_extra"); _pn_c = cols.get("notturno")
+
+                        for _i, _r in sdf.iterrows():
+                            _d   = _r["__date"]
+                            _apt = _ss(_r[cols["apt"]])
+                            _to  = _ss(_r[_to_c]) if _to_c else ""
+                            _as  = _ss(_r[_ass_c]) if _ass_c else ""
+                            _sh,_sm = _r["__shm"]; _eh,_em = _r["__ehm"]
+                            _tn  = f"{_sh:02d}:{_sm:02d}-{_eh:02d}:{_em:02d}"
+                            _key = (_d, _to, _apt, _as)
+
+                            _atdt = []
+                            if cols.get("atd"):
+                                for _hh,_mm in extract_atd_candidates(_r[cols["atd"]]):
+                                    _tdt = _d + pd.Timedelta(hours=_hh, minutes=_mm)
+                                    if _tdt < _r["__start_dt"]: _tdt += pd.Timedelta(days=1)
+                                    if _std_c and _std_c in _r.index:
+                                        _sp = parse_time_value(_r[_std_c])
+                                        if _sp:
+                                            _st = _d + pd.Timedelta(hours=_sp[0], minutes=_sp[1])
+                                            if _st < _r["__start_dt"]: _st += pd.Timedelta(days=1)
+                                            if _tdt < _st - pd.Timedelta(hours=2): continue
+                                    _atdt.append(_tdt)
+                            if _std_c and _std_c in _r.index:
+                                _sp = parse_time_value(_r[_std_c])
+                                if _sp:
+                                    _tdt = _d + pd.Timedelta(hours=_sp[0], minutes=_sp[1])
+                                    if _tdt < _r["__start_dt"]: _tdt += pd.Timedelta(days=1)
+                                    _atdt.append(_tdt)
+
+                            _src = SourceRowRef(file=file_path, sheet=sheet_name,
+                                                row_index=int(_r["__sheet_row_order"]),
+                                                original_order=int(_r["__global_order"]))
+
+                            if _key not in blocks:
+                                _vc = cols.get("volo"); _vv = _ss(_r[_vc]) if _vc and _vc in _r.index else None
+                                _dc = cols.get("destinazione"); _dv = _ss(_r[_dc]) if _dc and _dc in _r.index else None
+                                blocks[_key] = BlockAgg(
+                                    date=_d, apt=_apt,
+                                    turno_raw_ffill=_tn, turno_norm=_tn,
+                                    start_dt=_r["__start_dt"], end_dt=_r["__end_dt"],
+                                    no_dec=False, atd_list=_atdt.copy(),
+                                    festivo_flag=bool(_r["__festivo"]), first_source=_src,
+                                    assistente=_as or None,
+                                    volo=_vv or None, destinazione=_dv or None,
+                                    provided_importo=parse_eur(_r[_pi_c]) if _pi_c else None,
+                                    provided_extra_min=parse_minutes_from_cell(_r[_pe_c]) if _pe_c else None,
+                                    provided_night_min=parse_minutes_from_cell(_r[_pn_c]) if _pn_c else None,
+                                )
+                            else:
+                                _b = blocks[_key]
+                                _b.atd_list.extend(_atdt)
+                                _b.festivo_flag = _b.festivo_flag or bool(_r["__festivo"])
+                                if _src.original_order < _b.first_source.original_order:
+                                    _b.first_source = _src
+                continue  # nuovo formato processato — salta il vecchio codice sotto
+
+            # ── VECCHIO FORMATO (TURNO stringa) — codice originale ───────────
+
 
             # Forward-fill TURNO per DATA within the sheet chunk order
             turno_col = cols["turno"]

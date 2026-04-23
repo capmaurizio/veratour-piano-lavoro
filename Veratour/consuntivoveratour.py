@@ -407,24 +407,36 @@ def find_col(df: pd.DataFrame, patterns: Iterable[str]) -> Optional[str]:
 
 def detect_columns(df: pd.DataFrame) -> Dict[str, Optional[str]]:
     """
-    Map:
-      data, tour_operator, apt, turno, std, atd, importo, ore_extra, notturno, festivo, assistente
+    Rileva e mappa le colonne del DataFrame.
+    Supporta il vecchio modello (colonna 'turno') e il nuovo modello 2026
+    (colonne 'inizio turno' + 'fine turno' + 'assistente' + 'agenzia' + 'servizio').
     """
     return {
-        "data": find_col(df, [r"^data$", r"\bdate\b"]),
+        "data":          find_col(df, [r"^data$", r"\bdate\b"]),
         "tour_operator": find_col(df, [r"tour\s*operator", r"^to$", r"\boperatore\b"]),
-        "apt": find_col(df, [r"^apt$", r"\baeroporto\b", r"\bscalo\b"]),
-        "turno": find_col(df, [r"^turno$", r"\bturni\b"]),
-        "std": find_col(df, [r"^std$", r"\borario\s*std\b"]),
-        "atd": find_col(df, [r"^atd$", r"\borario\s*atd\b"]),
-        "importo": find_col(df, [r"^importo$", r"\btotale\b", r"\bimporto\b"]),
-        "ore_extra": find_col(df, [r"\bore\s*extra\b", r"^extra$", r"\bextra\s*(min|ore)\b"]),
-        "notturno": find_col(df, [r"^notturno$", r"\bnight\b"]),
-        "festivo": find_col(df, [r"^festivo$", r"\bholiday\b"]),
-        "assistente": find_col(df, [r"^assistente$", r"\bassistente\b"]),
-        "volo": find_col(df, [r"^volo$", r"numero\s*volo", r"n\.?\s*volo", r"flight"]),
-        "destinazione": find_col(df, [r"^DEST\.?NE$", r"^DEST$", r"DESTINAZIONE", r"DESTINATION"]),
+        "apt":           find_col(df, [r"^apt$", r"\baeroporto\b", r"\bscalo\b"]),
+        # Vecchio modello: colonna 'TURNO' con orario inizio-fine in testo
+        "turno":         find_col(df, [r"^turno$", r"\bturni\b"]),
+        # Nuovo modello 2026: colonne separate Inizio Turno / Fine turno
+        "inizio_turno":  find_col(df, [r"inizio\s*turno", r"^inizio$"]),
+        "fine_turno":    find_col(df, [r"fine\s*turno", r"^fine\s*turno$"]),
+        # Convocazione (nuovo modello 2026)
+        "convocazione":  find_col(df, [r"^convocazione", r"^conv", r"^cvc$"]),
+        # Agenzia (nuovo modello 2026)
+        "agenzia":       find_col(df, [r"^agenzia$", r"\bagency\b"]),
+        # Servizio (nuovo modello 2026)
+        "servizio":      find_col(df, [r"^servizio$", r"^servizi$"]),
+        "std":           find_col(df, [r"^std$", r"\borario\s*std\b"]),
+        "atd":           find_col(df, [r"^atd$", r"\borario\s*atd\b"]),
+        "importo":       find_col(df, [r"^importo$", r"\btotale\b", r"\bimporto\b"]),
+        "ore_extra":     find_col(df, [r"\bore\s*extra\b", r"^extra$", r"\bextra\s*(min|ore)\b"]),
+        "notturno":      find_col(df, [r"^notturno$", r"\bnight\b"]),
+        "festivo":       find_col(df, [r"^festivo$", r"\bholiday\b"]),
+        "assistente":    find_col(df, [r"^assistente$", r"\bassistente\b"]),
+        "volo":          find_col(df, [r"^volo$", r"numero\s*volo", r"n\.?\s*volo", r"flight"]),
+        "destinazione":  find_col(df, [r"^DEST\.?NE$", r"^DEST$", r"DESTINAZIONE", r"DESTINATION"]),
     }
+
 
 
 # -----------------------------
@@ -576,9 +588,11 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
             sdf = normalize_cols(sdf0)
             cols = detect_columns(sdf)
 
-            # Minimal cols required
-            if not cols["data"] or not cols["apt"] or not cols["turno"]:
+            # Minimal cols required: DATA e APT sempre; poi o nuovo formato (inizio+fine) o vecchio (turno)
+            has_orario = (cols["inizio_turno"] and cols["fine_turno"]) or cols["turno"]
+            if not cols["data"] or not cols["apt"] or not has_orario:
                 continue
+
 
             # Filter TO if present
             if cols["tour_operator"]:
@@ -606,147 +620,295 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
             sdf["__sheet_row_order"] = np.arange(len(sdf), dtype=int)
             sdf["__global_order"] = np.arange(global_order, global_order + len(sdf), dtype=int)
             global_order += len(sdf)
-
-            # Forward-fill TURNO per DATA within the sheet chunk order (already in original read order).
-            # Il turno si propaga a TUTTI i voli dello stesso giorno/apt (inclusi quelli senza TURNO esplicito),
-            # permettendo a più voli in turnate spezzate di condividere lo stesso blocco.
-            turno_col = cols["turno"]
+            # ──────────────────────────────────────────────────────────────────
+            # Determina il formato: NUOVO 2026 (Inizio Turno + Fine turno)
+            #                    o VECCHIO    (colonna TURNO con testo hh:mm-hh:mm)
+            # ──────────────────────────────────────────────────────────────────
+            is_new_format = bool(cols["inizio_turno"] and cols["fine_turno"])
             std_col = cols.get("std")
-            sdf["__turno_raw"] = sdf[turno_col].astype(str)
-            ffill_src = sdf[turno_col].replace("", np.nan)
-            sdf["__turno_ffill_raw"] = ffill_src.groupby(sdf["__date"]).ffill()
 
-            # Parse turno
-            parsed = sdf["__turno_ffill_raw"].apply(parse_turno)
-            sdf["__start_str"] = parsed.apply(lambda x: x[0])
-            sdf["__end_str"] = parsed.apply(lambda x: x[1])
-            sdf["__no_dec"] = parsed.apply(lambda x: x[2])
-            sdf["__turno_norm"] = parsed.apply(lambda x: x[3])
+            if is_new_format:
+                # ── NUOVO FORMATO 2026 ─────────────────────────────────────────
+                # Chiave blocco: (DATA, TOUR OPERATOR normalizzato, APT, ASSISTENTE)
+                # Riga master = ha Inizio Turno compilato
+                # Riga slave  = Inizio Turno vuoto → prende i valori dalla riga master
+                inizio_col = cols["inizio_turno"]
+                fine_col   = cols["fine_turno"]
+                to_col     = cols["tour_operator"]
+                ass_col    = cols["assistente"]
 
-            # Exclude non-interpretable TURNO blocks
-            sdf = sdf[sdf["__start_str"].notna() & sdf["__end_str"].notna()].copy()
-            if sdf.empty:
-                continue
+                def _safe_str(v):
+                    s = str(v).strip() if pd.notna(v) else ""
+                    return "" if s.lower() in ("nan", "none") else s
 
-            # Build start/end datetime
-            sdf["__start_dt"] = sdf.apply(lambda r: to_dt(r["__date"], r["__start_str"]), axis=1)
-            sdf["__end_dt"] = sdf.apply(lambda r: to_dt(r["__date"], r["__end_str"]), axis=1)
-            overnight = sdf["__end_dt"] < sdf["__start_dt"]
-            sdf.loc[overnight, "__end_dt"] = sdf.loc[overnight, "__end_dt"] + pd.Timedelta(days=1)
+                # Costruisci chiave di gruppo per forward-fill
+                sdf["__to_str"]   = sdf[to_col].apply(_safe_str) if to_col else ""
+                sdf["__ass_str"]  = sdf[ass_col].apply(_safe_str) if ass_col else ""
+                sdf["__grp_key"]  = (
+                    sdf["__date"].astype(str) + "|" +
+                    sdf["__to_str"] + "|" +
+                    sdf[cols["apt"]].apply(_safe_str) + "|" +
+                    sdf["__ass_str"]
+                )
 
-            # Festivo by column if present
-            if cols["festivo"]:
-                sdf["__festivo"] = sdf[cols["festivo"]].apply(is_truthy_festivo)
-            else:
-                sdf["__festivo"] = False
+                # Forward-fill inizio/fine turno dalla riga master alle righe slave
+                sdf["__inizio_ffill"] = sdf[inizio_col].replace("", np.nan)
+                sdf["__fine_ffill"]   = sdf[fine_col].replace("", np.nan)
+                sdf["__inizio_ffill"] = sdf.groupby("__grp_key")["__inizio_ffill"].ffill()
+                sdf["__fine_ffill"]   = sdf.groupby("__grp_key")["__fine_ffill"].ffill()
 
-            # Provided values for discrepancy (first row of each block)
-            prov_importo_col = cols["importo"]
-            prov_extra_col = cols["ore_extra"]
-            prov_night_col = cols["notturno"]
+                # Scarta righe senza master (nessun inizio/fine nel blocco)
+                sdf = sdf[sdf["__inizio_ffill"].notna() & sdf["__fine_ffill"].notna()].copy()
+                if sdf.empty:
+                    continue
 
-            # Iterate rows and aggregate by block
-            for idx, r in sdf.iterrows():
-                d = r["__date"]
-                apt = str(r[cols["apt"]]).strip()
-                turno_norm = str(r["__turno_norm"]).strip()
-                turno_ffill_raw = str(r["__turno_ffill_raw"]).strip()
+                def _parse_time_col(val):
+                    """Converte valore cella (time, Timedelta, stringa HH:MM) in (hh, mm)."""
+                    if pd.isna(val):
+                        return None
+                    if isinstance(val, pd.Timedelta):
+                        total_s = int(val.total_seconds())
+                        return (total_s // 3600, (total_s % 3600) // 60)
+                    return parse_time_value(val)
 
-                key = (d, apt, turno_norm)
+                sdf["__start_hhmm"] = sdf["__inizio_ffill"].apply(_parse_time_col)
+                sdf["__end_hhmm"]   = sdf["__fine_ffill"].apply(_parse_time_col)
 
-                # Extract ATD candidates from row
-                atd_times: List[Tuple[int, int]] = []
-                if cols["atd"]:
-                    atd_times.extend(extract_atd_candidates(r[cols["atd"]]))
-                # Aggiungi STD come candidato ATD di fallback (volo decollato in orario o in ritardo)
-                if std_col and std_col in r.index:
-                    std_parsed = parse_time_value(r[std_col])
-                    if std_parsed:
-                        atd_times.append(std_parsed)
+                sdf = sdf[sdf["__start_hhmm"].notna() & sdf["__end_hhmm"].notna()].copy()
+                if sdf.empty:
+                    continue
 
-                # Anchor ATDs to date; if ATD < start_dt => +1 day
-                atd_dt_list: List[pd.Timestamp] = []
-                for hh, mm in atd_times:
-                    tdt = d + pd.Timedelta(hours=hh, minutes=mm)
-                    if tdt < r["__start_dt"]:
-                        tdt = tdt + pd.Timedelta(days=1)
-                    # Filtra ATD anomali: ATD valido deve essere >= STD - 2h
-                    # (valori molto antecedenti alla STD sono errori di inserimento)
+                sdf["__start_dt"] = sdf.apply(
+                    lambda r: to_dt(r["__date"], f"{r['__start_hhmm'][0]:02d}:{r['__start_hhmm'][1]:02d}"), axis=1
+                )
+                sdf["__end_dt"] = sdf.apply(
+                    lambda r: to_dt(r["__date"], f"{r['__end_hhmm'][0]:02d}:{r['__end_hhmm'][1]:02d}"), axis=1
+                )
+                overnight = sdf["__end_dt"] < sdf["__start_dt"]
+                sdf.loc[overnight, "__end_dt"] = sdf.loc[overnight, "__end_dt"] + pd.Timedelta(days=1)
+
+                if cols["festivo"]:
+                    sdf["__festivo"] = sdf[cols["festivo"]].apply(is_truthy_festivo)
+                else:
+                    sdf["__festivo"] = False
+
+                prov_importo_col = cols["importo"]
+                prov_extra_col   = cols["ore_extra"]
+                prov_night_col   = cols["notturno"]
+
+                for idx, r in sdf.iterrows():
+                    d       = r["__date"]
+                    apt     = _safe_str(r[cols["apt"]])
+                    to_str  = _safe_str(r[to_col]) if to_col else ""
+                    ass_str = _safe_str(r[ass_col]) if ass_col else ""
+
+                    # Rappresentazione testuale del turno per output
+                    sh, sm = r["__start_hhmm"]
+                    eh, em = r["__end_hhmm"]
+                    turno_norm = f"{sh:02d}:{sm:02d}-{eh:02d}:{em:02d}"
+
+                    # Chiave blocco nuovo formato: DATA + TO + APT + ASSISTENTE
+                    key = (d, to_str, apt, ass_str)
+
+                    # ATD candidates da questa riga (raccoglie da TUTTE le righe del blocco)
+                    atd_times: List[Tuple[int, int]] = []
+                    if cols["atd"]:
+                        atd_times.extend(extract_atd_candidates(r[cols["atd"]]))
                     if std_col and std_col in r.index:
                         std_parsed = parse_time_value(r[std_col])
                         if std_parsed:
-                            std_tdt = d + pd.Timedelta(hours=std_parsed[0], minutes=std_parsed[1])
-                            if std_tdt < r["__start_dt"]:
-                                std_tdt = std_tdt + pd.Timedelta(days=1)
-                            # Scarta ATD se è più di 2 ore prima della STD (probabile errore)
-                            if tdt < std_tdt - pd.Timedelta(hours=2):
-                                continue
-                    atd_dt_list.append(tdt)
+                            atd_times.append(std_parsed)
 
-                # Determine first-source reference (first appearance of the block)
-                src = SourceRowRef(file=file_path, sheet=sheet_name, row_index=int(r["__sheet_row_order"]), original_order=int(r["__global_order"]))
+                    atd_dt_list: List[pd.Timestamp] = []
+                    for hh, mm in atd_times:
+                        tdt = d + pd.Timedelta(hours=hh, minutes=mm)
+                        if tdt < r["__start_dt"]:
+                            tdt += pd.Timedelta(days=1)
+                        if std_col and std_col in r.index:
+                            std_parsed = parse_time_value(r[std_col])
+                            if std_parsed:
+                                std_tdt = d + pd.Timedelta(hours=std_parsed[0], minutes=std_parsed[1])
+                                if std_tdt < r["__start_dt"]:
+                                    std_tdt += pd.Timedelta(days=1)
+                                if tdt < std_tdt - pd.Timedelta(hours=2):
+                                    continue
+                        atd_dt_list.append(tdt)
 
-                if key not in blocks:
-                    # Save "provided" values from this first row (for discrepancy sheet)
-                    prov_importo = parse_eur(r[prov_importo_col]) if prov_importo_col else None
-                    prov_extra_min = parse_minutes_from_cell(r[prov_extra_col]) if prov_extra_col else None
-                    prov_night_min = parse_minutes_from_cell(r[prov_night_col]) if prov_night_col else None
-                    
-                    # Extract assistente from first row
-                    assistente_col = cols["assistente"]
-                    assistente_val = None
-                    if assistente_col and assistente_col in r.index:
-                        assistente_val = str(r[assistente_col]).strip() if pd.notna(r[assistente_col]) else None
-                        if assistente_val == "" or assistente_val == "nan":
-                            assistente_val = None
-                    
-                    # Extract volo from first row
-                    volo_col = cols.get("volo")
-                    volo_val = None
-                    if volo_col and volo_col in r.index:
-                        volo_val = str(r[volo_col]).strip() if pd.notna(r[volo_col]) else None
-                        if volo_val == "" or volo_val == "nan":
-                            volo_val = None
-
-                    # Extract destinazione from first row
-                    dest_col = cols.get("destinazione")
-                    dest_val = None
-                    if dest_col and dest_col in r.index:
-                        dest_val = str(r[dest_col]).strip() if pd.notna(r[dest_col]) else None
-                        if dest_val == "" or dest_val == "nan":
-                            dest_val = None
-
-                    blocks[key] = BlockAgg(
-                        date=d,
-                        apt=apt,
-                        turno_raw_ffill=turno_ffill_raw,
-                        turno_norm=turno_norm,
-                        start_dt=r["__start_dt"],
-                        end_dt=r["__end_dt"],
-                        no_dec=bool(r["__no_dec"]),
-                        atd_list=atd_dt_list.copy(),
-                        festivo_flag=bool(r["__festivo"]),
-                        first_source=src,
-                        assistente=assistente_val,
-                        volo=volo_val,
-                        destinazione=dest_val,
-                        provided_importo=prov_importo,
-                        provided_extra_min=prov_extra_min,
-                        provided_night_min=prov_night_min,
+                    src = SourceRowRef(
+                        file=file_path, sheet=sheet_name,
+                        row_index=int(r["__sheet_row_order"]),
+                        original_order=int(r["__global_order"])
                     )
+
+                    if key not in blocks:
+                        prov_importo   = parse_eur(r[prov_importo_col]) if prov_importo_col else None
+                        prov_extra_min = parse_minutes_from_cell(r[prov_extra_col]) if prov_extra_col else None
+                        prov_night_min = parse_minutes_from_cell(r[prov_night_col]) if prov_night_col else None
+
+                        volo_col = cols.get("volo")
+                        volo_val = _safe_str(r[volo_col]) if volo_col and volo_col in r.index else None
+                        volo_val = volo_val or None
+
+                        dest_col = cols.get("destinazione")
+                        dest_val = _safe_str(r[dest_col]) if dest_col and dest_col in r.index else None
+                        dest_val = dest_val or None
+
+                        blocks[key] = BlockAgg(
+                            date=d, apt=apt,
+                            turno_raw_ffill=turno_norm,
+                            turno_norm=turno_norm,
+                            start_dt=r["__start_dt"],
+                            end_dt=r["__end_dt"],
+                            no_dec=False,
+                            atd_list=atd_dt_list.copy(),
+                            festivo_flag=bool(r["__festivo"]),
+                            first_source=src,
+                            assistente=ass_str or None,
+                            volo=volo_val,
+                            destinazione=dest_val,
+                            provided_importo=prov_importo,
+                            provided_extra_min=prov_extra_min,
+                            provided_night_min=prov_night_min,
+                        )
+                    else:
+                        b = blocks[key]
+                        b.atd_list.extend(atd_dt_list)
+                        b.festivo_flag = b.festivo_flag or bool(r["__festivo"])
+                        if src.original_order < b.first_source.original_order:
+                            b.first_source = src
+
+            else:
+                # ── VECCHIO FORMATO (TURNO come stringa testo hh:mm-hh:mm) ────
+                turno_col = cols["turno"]
+                if not turno_col:
+                    continue  # né nuovo né vecchio formato riconoscibile: skip
+
+                # Forward-fill TURNO per DATA
+                sdf["__turno_raw"] = sdf[turno_col].astype(str)
+                ffill_src = sdf[turno_col].replace("", np.nan)
+                sdf["__turno_ffill_raw"] = ffill_src.groupby(sdf["__date"]).ffill()
+
+                # Parse turno
+                parsed = sdf["__turno_ffill_raw"].apply(parse_turno)
+                sdf["__start_str"]  = parsed.apply(lambda x: x[0])
+                sdf["__end_str"]    = parsed.apply(lambda x: x[1])
+                sdf["__no_dec"]     = parsed.apply(lambda x: x[2])
+                sdf["__turno_norm"] = parsed.apply(lambda x: x[3])
+
+                sdf = sdf[sdf["__start_str"].notna() & sdf["__end_str"].notna()].copy()
+                if sdf.empty:
+                    continue
+
+                sdf["__start_dt"] = sdf.apply(lambda r: to_dt(r["__date"], r["__start_str"]), axis=1)
+                sdf["__end_dt"]   = sdf.apply(lambda r: to_dt(r["__date"], r["__end_str"]), axis=1)
+                overnight = sdf["__end_dt"] < sdf["__start_dt"]
+                sdf.loc[overnight, "__end_dt"] = sdf.loc[overnight, "__end_dt"] + pd.Timedelta(days=1)
+
+                if cols["festivo"]:
+                    sdf["__festivo"] = sdf[cols["festivo"]].apply(is_truthy_festivo)
                 else:
-                    # merge
-                    b = blocks[key]
-                    b.atd_list.extend(atd_dt_list)
-                    # If any row in block says festivo -> festivo
-                    b.festivo_flag = b.festivo_flag or bool(r["__festivo"])
-                    # Keep earliest source by global order
-                    if src.original_order < b.first_source.original_order:
-                        b.first_source = src
-                        # update provided values to align with "first row of block"
-                        b.provided_importo = parse_eur(r[prov_importo_col]) if prov_importo_col else b.provided_importo
-                        b.provided_extra_min = parse_minutes_from_cell(r[prov_extra_col]) if prov_extra_col else b.provided_extra_min
-                        b.provided_night_min = parse_minutes_from_cell(r[prov_night_col]) if prov_night_col else b.provided_night_min
+                    sdf["__festivo"] = False
+
+                prov_importo_col = cols["importo"]
+                prov_extra_col   = cols["ore_extra"]
+                prov_night_col   = cols["notturno"]
+
+                for idx, r in sdf.iterrows():
+                    d   = r["__date"]
+                    apt = str(r[cols["apt"]]).strip()
+                    turno_norm      = str(r["__turno_norm"]).strip()
+                    turno_ffill_raw = str(r["__turno_ffill_raw"]).strip()
+
+                    key = (d, apt, turno_norm)
+
+                    # Extract ATD candidates from row
+                    atd_times: List[Tuple[int, int]] = []
+                    if cols["atd"]:
+                        atd_times.extend(extract_atd_candidates(r[cols["atd"]]))
+                    # Aggiungi STD come candidato ATD di fallback
+                    if std_col and std_col in r.index:
+                        std_parsed = parse_time_value(r[std_col])
+                        if std_parsed:
+                            atd_times.append(std_parsed)
+
+                    # Anchor ATDs to date; if ATD < start_dt => +1 day
+                    atd_dt_list: List[pd.Timestamp] = []
+                    for hh, mm in atd_times:
+                        tdt = d + pd.Timedelta(hours=hh, minutes=mm)
+                        if tdt < r["__start_dt"]:
+                            tdt = tdt + pd.Timedelta(days=1)
+                        # Filtra ATD anomali: ATD valido deve essere >= STD - 2h
+                        if std_col and std_col in r.index:
+                            std_parsed = parse_time_value(r[std_col])
+                            if std_parsed:
+                                std_tdt = d + pd.Timedelta(hours=std_parsed[0], minutes=std_parsed[1])
+                                if std_tdt < r["__start_dt"]:
+                                    std_tdt = std_tdt + pd.Timedelta(days=1)
+                                if tdt < std_tdt - pd.Timedelta(hours=2):
+                                    continue
+                        atd_dt_list.append(tdt)
+
+                    # Determine first-source reference
+                    src = SourceRowRef(file=file_path, sheet=sheet_name, row_index=int(r["__sheet_row_order"]), original_order=int(r["__global_order"]))
+
+                    if key not in blocks:
+                        prov_importo = parse_eur(r[prov_importo_col]) if prov_importo_col else None
+                        prov_extra_min = parse_minutes_from_cell(r[prov_extra_col]) if prov_extra_col else None
+                        prov_night_min = parse_minutes_from_cell(r[prov_night_col]) if prov_night_col else None
+
+                        # Extract assistente from first row
+                        assistente_col = cols["assistente"]
+                        assistente_val = None
+                        if assistente_col and assistente_col in r.index:
+                            assistente_val = str(r[assistente_col]).strip() if pd.notna(r[assistente_col]) else None
+                            if assistente_val == "" or assistente_val == "nan":
+                                assistente_val = None
+
+                        # Extract volo from first row
+                        volo_col = cols.get("volo")
+                        volo_val = None
+                        if volo_col and volo_col in r.index:
+                            volo_val = str(r[volo_col]).strip() if pd.notna(r[volo_col]) else None
+                            if volo_val == "" or volo_val == "nan":
+                                volo_val = None
+
+                        # Extract destinazione from first row
+                        dest_col = cols.get("destinazione")
+                        dest_val = None
+                        if dest_col and dest_col in r.index:
+                            dest_val = str(r[dest_col]).strip() if pd.notna(r[dest_col]) else None
+                            if dest_val == "" or dest_val == "nan":
+                                dest_val = None
+
+                        blocks[key] = BlockAgg(
+                            date=d,
+                            apt=apt,
+                            turno_raw_ffill=turno_ffill_raw,
+                            turno_norm=turno_norm,
+                            start_dt=r["__start_dt"],
+                            end_dt=r["__end_dt"],
+                            no_dec=bool(r["__no_dec"]),
+                            atd_list=atd_dt_list.copy(),
+                            festivo_flag=bool(r["__festivo"]),
+                            first_source=src,
+                            assistente=assistente_val,
+                            volo=volo_val,
+                            destinazione=dest_val,
+                            provided_importo=prov_importo,
+                            provided_extra_min=prov_extra_min,
+                            provided_night_min=prov_night_min,
+                        )
+                    else:
+                        # merge
+                        b = blocks[key]
+                        b.atd_list.extend(atd_dt_list)
+                        b.festivo_flag = b.festivo_flag or bool(r["__festivo"])
+                        if src.original_order < b.first_source.original_order:
+                            b.first_source = src
+                            b.provided_importo = parse_eur(r[prov_importo_col]) if prov_importo_col else b.provided_importo
+                            b.provided_extra_min = parse_minutes_from_cell(r[prov_extra_col]) if prov_extra_col else b.provided_extra_min
+                            b.provided_night_min = parse_minutes_from_cell(r[prov_night_col]) if prov_night_col else b.provided_night_min
+
 
     # Apply holiday dates: first try external list, otherwise use Italian holidays 2025
     holiday_dates_to_use = cfg.holiday_dates

@@ -78,11 +78,9 @@ has_results = ('output_file' in st.session_state and
                st.session_state['output_file'] is not None)
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Menu Sidebar (Sezioni e Navigazione)
-# ═══════════════════════════════════════════════════════════════════════════════
 st.sidebar.markdown('<h2>SCAY Admin Panel</h2>', unsafe_allow_html=True)
 st.sidebar.markdown('<hr style="margin:0.5em 0;" />', unsafe_allow_html=True)
-app_page = st.sidebar.radio("Seleziona Strumento:", ["🧮 Calcolo Piano Lavoro", "📚 Regolamenti & Tariffe"])
+app_page = st.sidebar.radio("Seleziona Strumento:", ["Calcolo Piano Lavoro", "Regolamenti e Tariffe"])
 
 # Top bar + logout
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -118,7 +116,7 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is None:
     # Step 0: waiting for upload
-    if app_page == "📚 Regolamenti & Tariffe":
+    if app_page == "Regolamenti e Tariffe":
         render_regolamento_page()
     else:
         render_stepper(0)
@@ -132,7 +130,7 @@ if uploaded_file is None:
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Se l'utente è sulla pagina Regolamenti, non fare il computing, mostra e stop.
-if app_page == "📚 Regolamenti & Tariffe":
+if app_page == "Regolamenti e Tariffe":
     render_regolamento_page()
     render_footer()
     st.stop()
@@ -153,17 +151,28 @@ st.session_state['tmp_file_path'] = tmp_path
 def validate_file_structure(file_path: str) -> list:
     """
     Controlla che il file Excel abbia la struttura attesa.
+    Supporta il vecchio modello (colonna TURNO) e il nuovo modello 2026
+    (Inizio Turno + Fine turno + Assistente + Agenzia + Servizio).
     Restituisce lista di dict con: tipo ('error'/'warn'/'ok'), messaggio.
     """
     issues = []
-    required_cols = ['DATA', 'APT', 'TURNO', 'STD', 'ATD', 'TOUR OPERATOR']
+    required_cols = ['DATA', 'APT', 'INIZIO TURNO', 'FINE TURNO', 'STD', 'ATD', 'TOUR OPERATOR']
     alt_names = {
-        'DATA': ['DATA', 'H', 'DATA VOLO', 'DATA/ORA'],
-        'APT':  ['APT', 'AEROPORTO', 'AIRPORT'],
-        'TURNO': ['TURNO', 'NOTE E TURNI', 'TURNI'],
-        'STD':  ['STD', 'CONV.NE', 'CONVOCAZIONE', 'STD (ORA DEP)'],
-        'ATD':  ['ATD', 'ATD REALE', 'PARTENZA REALE'],
+        'DATA':          ['DATA', 'H', 'DATA VOLO', 'DATA/ORA'],
+        'APT':           ['APT', 'AEROPORTO', 'AIRPORT'],
+        # Nuovo modello 2026: Inizio Turno + Fine turno. Vecchio (retrocompat): TURNO
+        'INIZIO TURNO':  ['INIZIO TURNO', 'TURNO', 'NOTE E TURNI', 'TURNI'],
+        'FINE TURNO':    ['FINE TURNO', 'FINE'],
+        'STD':           ['STD', 'CONV.NE', 'CONVOCAZIONE', 'STD (ORA DEP)'],
+        'ATD':           ['ATD', 'ATD REALE', 'PARTENZA REALE'],
         'TOUR OPERATOR': ['TOUR OPERATOR', 'OPERATORE', 'TO'],
+    }
+    # Colonne opzionali del nuovo modello 2026 (no errore se assenti)
+    optional_cols = {
+        'ASSISTENTE':    ['ASSISTENTE'],
+        'AGENZIA':       ['AGENZIA', 'AGENCY'],
+        'SERVIZIO':      ['SERVIZIO', 'SERVIZI'],
+        'CONVOCAZIONE':  ['CONVOCAZIONE', 'CONV', 'CVC'],
     }
     try:
         xls = pd.ExcelFile(file_path)
