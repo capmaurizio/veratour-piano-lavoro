@@ -489,16 +489,11 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
             if not cols["data"] or not cols["apt"] or not has_orario:
                 continue
 
-            # Filter TO if present
-            # Baobab e TH fanno parte dello stesso pacchetto
+            # Filter TO if present — match esatto con cfg.to_keyword
+            # (evita che 'baobab' catturi anche 'baobab/th' e viceversa)
             if cols["tour_operator"]:
-                # Cerca sia "baobab" che "th" (case insensitive)
-                # Pattern: "baobab", "th", "baobab/th", "baobab / th", ecc.
-                mask_baobab = sdf[cols["tour_operator"]].astype(str).str.contains("baobab", case=False, na=False)
-                # Cerca "th" come parola intera (non "thailand", "the", ecc.)
-                mask_th = sdf[cols["tour_operator"]].astype(str).str.contains(r"\bth\b", case=False, na=False, regex=True)
-                # Unisci i due filtri
-                mask_to = mask_baobab | mask_th
+                mask_to = (sdf[cols["tour_operator"]].astype(str).str.strip().str.upper()
+                           == cfg.to_keyword.strip().upper())
                 sdf = sdf[mask_to].copy()
                 if sdf.empty:
                     continue

@@ -40,8 +40,33 @@ def _make_compat_excel(input_path: str) -> Optional[str]:
     - colonna TURNO sintetizzata (HH:MM-HH:MM) da INIZIO+FINE dove disponibili
     - TURNO da STD-2h30→STD per righe senza INIZIO TURNO
     - INIZIO TURNO e FINE TURNO RIMOSSI → forza percorso old-format nei moduli
+    - STD/ATD/CONVOCAZIONE/ATA/STA convertiti in stringhe 'HH:MM' (non float Excel)
     Restituisce path al file temp, o None se non necessario.
     """
+    # Pattern colonne che contengono orari (da convertire in stringa HH:MM)
+    TIME_COLS = ('STD', 'ATD', 'ATA', 'STA', 'CONVOCAZIONE', 'CONV')
+
+    def _fmt(val):
+        """Converte qualsiasi valore orario in stringa 'HH:MM'."""
+        try:
+            if val is None or pd.isna(val): return ''
+        except Exception:
+            pass
+        if isinstance(val, pd.Timedelta):
+            s = int(val.total_seconds())
+            return f"{s//3600:02d}:{(s%3600)//60:02d}"
+        if hasattr(val, 'hour'):  # datetime, time, Timestamp
+            return f"{val.hour:02d}:{val.minute:02d}"
+        # Float Excel (es. 0.604167 = 14:30)
+        if isinstance(val, (int, float)) and not isinstance(val, bool):
+            fv = float(val)
+            if 0.0 <= fv < 1.0:
+                total_m = int(round(fv * 24 * 60))
+                return f"{(total_m//60)%24:02d}:{total_m%60:02d}"
+        s = str(val).strip()
+        m = re.match(r'(\d{1,2})[:\.](\d{2})', s)
+        return f"{int(m.group(1)):02d}:{int(m.group(2)):02d}" if m else s
+
     try:
         xls = pd.ExcelFile(input_path)
         needs_conversion = False
@@ -61,17 +86,6 @@ def _make_compat_excel(input_path: str) -> Optional[str]:
                 fine_col   = next(c for c in df.columns if 'FINE TURNO'   in str(c).strip().upper())
                 std_col    = next((c for c in df.columns if str(c).strip().upper() == 'STD'), None)
 
-                def _fmt(val):
-                    if pd.isna(val): return ''
-                    if isinstance(val, pd.Timedelta):
-                        s = int(val.total_seconds())
-                        return f"{s//3600:02d}:{(s%3600)//60:02d}"
-                    if isinstance(val, (pd.Timestamp, datetime)):
-                        return f"{val.hour:02d}:{val.minute:02d}"
-                    s = str(val).strip()
-                    m = re.match(r'(\d{1,2})[:\.](\d{2})', s)
-                    return f"{int(m.group(1)):02d}:{int(m.group(2)):02d}" if m else s
-
                 turno_vals = []
                 for _, row in df.iterrows():
                     ini = _fmt(row[inizio_col])
@@ -79,8 +93,7 @@ def _make_compat_excel(input_path: str) -> Optional[str]:
                     if ini and fin:
                         turno_vals.append(f"{ini}-{fin}")
                     elif std_col is not None:
-                        std_v = row.get(std_col)
-                        std_s = _fmt(std_v) if std_v is not None else ''
+                        std_s = _fmt(row.get(std_col, ''))
                         if std_s:
                             try:
                                 sh, sm = map(int, std_s.split(':'))
@@ -94,8 +107,15 @@ def _make_compat_excel(input_path: str) -> Optional[str]:
                         turno_vals.append(None)
 
                 df['TURNO'] = turno_vals
-                # CHIAVE: rimuovi INIZIO TURNO e FINE TURNO → i moduli usano il vecchio percorso TURNO
+                # Rimuovi INIZIO/FINE TURNO → i moduli usano old-format path
                 df = df.drop(columns=[inizio_col, fine_col], errors='ignore')
+
+            # FIX CRITICO: converti colonne orario in stringhe 'HH:MM'
+            # così tutti i moduli legacy possono parsarle (evita float Excel)
+            for col in df.columns:
+                col_key = str(col).strip().upper()
+                if any(col_key == p or col_key.startswith(p) for p in TIME_COLS):
+                    df[col] = df[col].apply(_fmt)
 
             sheets_data[sheet_name] = df
 
