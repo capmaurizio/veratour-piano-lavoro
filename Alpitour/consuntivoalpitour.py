@@ -951,6 +951,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                                     turno_raw_ffill=_tn, turno_norm=_tn,
                                     start_dt=_r["__start_dt"], end_dt=_r["__end_dt"],
                                     no_dec=False, atd_list=_atdt.copy(),
+                                    std_list=[],  # FIX: campo richiesto, STD già in atd_list nel nuovo formato
                                     festivo_flag=bool(_r["__festivo"]), first_source=_src,
                                     assistente=_as or None,
                                     volo=_vv or None, destinazione=_dv or None,

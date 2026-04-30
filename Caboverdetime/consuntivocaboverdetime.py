@@ -449,7 +449,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
 
             # Filter TO if present - Caboverdetime
             if cols["tour_operator"]:
-                mask_caboverdetime = sdf[cols["tour_operator"]].astype(str).str.contains("caboverdetime", case=False, na=False)
+                mask_caboverdetime = sdf[cols["tour_operator"]].astype(str).str.contains(cfg.to_keyword, case=False, na=False)
                 sdf = sdf[mask_caboverdetime].copy()
                 if sdf.empty:
                     continue

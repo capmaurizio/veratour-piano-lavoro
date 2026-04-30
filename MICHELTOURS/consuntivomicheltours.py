@@ -466,7 +466,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
 
             # Filter TO if present - MichelTours
             if cols["tour_operator"]:
-                mask_micheltours = sdf[cols["tour_operator"]].astype(str).str.contains("micheltours|michel tours", case=False, na=False, regex=True)
+                mask_micheltours = sdf[cols["tour_operator"]].astype(str).str.contains(cfg.to_keyword, case=False, na=False)
                 sdf = sdf[mask_micheltours].copy()
                 if sdf.empty:
                     continue

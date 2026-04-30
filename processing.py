@@ -4,10 +4,12 @@
 import io
 import os
 import re
+import sys
 import tempfile
 import streamlit as st
 import pandas as pd
-from typing import Tuple, Dict, Set
+from datetime import datetime
+from typing import Tuple, Dict, Set, Optional
 
 from tour_operators import (
     detect_tour_operators,
@@ -19,6 +21,96 @@ from tour_operators import (
     write_output_excel_alpitour,
     ALPITOUR_AVAILABLE,
 )
+
+# Importa extract_atd_candidates da Veratour (funzione condivisa)
+# Viene iniettata nei moduli che la usano ma non la definiscono
+try:
+    from consuntivoveratour import extract_atd_candidates as _extract_atd_candidates
+except ImportError:
+    _extract_atd_candidates = None
+
+# Moduli che supportano il nuovo formato 2026 nativamente
+_NEW_FORMAT_MODULES = {'veratour', 'alpitour'}
+
+
+def _make_compat_excel(input_path: str) -> Optional[str]:
+    """
+    Se l'Excel usa il nuovo formato 2026 (INIZIO TURNO + FINE TURNO),
+    crea un file temp con:
+    - colonna TURNO sintetizzata (HH:MM-HH:MM) da INIZIO+FINE dove disponibili
+    - TURNO da STD-2h30→STD per righe senza INIZIO TURNO
+    - INIZIO TURNO e FINE TURNO RIMOSSI → forza percorso old-format nei moduli
+    Restituisce path al file temp, o None se non necessario.
+    """
+    try:
+        xls = pd.ExcelFile(input_path)
+        needs_conversion = False
+        sheets_data = {}
+
+        for sheet_name in xls.sheet_names:
+            df = pd.read_excel(input_path, sheet_name=sheet_name)
+            cols_up = [str(c).strip().upper() for c in df.columns]
+
+            has_inizio = any('INIZIO TURNO' in c for c in cols_up)
+            has_fine   = any('FINE TURNO'   in c for c in cols_up)
+            has_turno  = any(c in ('TURNO', 'TURNI') for c in cols_up)
+
+            if has_inizio and has_fine and not has_turno:
+                needs_conversion = True
+                inizio_col = next(c for c in df.columns if 'INIZIO TURNO' in str(c).strip().upper())
+                fine_col   = next(c for c in df.columns if 'FINE TURNO'   in str(c).strip().upper())
+                std_col    = next((c for c in df.columns if str(c).strip().upper() == 'STD'), None)
+
+                def _fmt(val):
+                    if pd.isna(val): return ''
+                    if isinstance(val, pd.Timedelta):
+                        s = int(val.total_seconds())
+                        return f"{s//3600:02d}:{(s%3600)//60:02d}"
+                    if isinstance(val, (pd.Timestamp, datetime)):
+                        return f"{val.hour:02d}:{val.minute:02d}"
+                    s = str(val).strip()
+                    m = re.match(r'(\d{1,2})[:\.](\d{2})', s)
+                    return f"{int(m.group(1)):02d}:{int(m.group(2)):02d}" if m else s
+
+                turno_vals = []
+                for _, row in df.iterrows():
+                    ini = _fmt(row[inizio_col])
+                    fin = _fmt(row[fine_col])
+                    if ini and fin:
+                        turno_vals.append(f"{ini}-{fin}")
+                    elif std_col is not None:
+                        std_v = row.get(std_col)
+                        std_s = _fmt(std_v) if std_v is not None else ''
+                        if std_s:
+                            try:
+                                sh, sm = map(int, std_s.split(':'))
+                                total = (sh * 60 + sm - 150) % 1440
+                                turno_vals.append(f"{total//60:02d}:{total%60:02d}-{std_s}")
+                            except Exception:
+                                turno_vals.append(None)
+                        else:
+                            turno_vals.append(None)
+                    else:
+                        turno_vals.append(None)
+
+                df['TURNO'] = turno_vals
+                # CHIAVE: rimuovi INIZIO TURNO e FINE TURNO → i moduli usano il vecchio percorso TURNO
+                df = df.drop(columns=[inizio_col, fine_col], errors='ignore')
+
+            sheets_data[sheet_name] = df
+
+        if not needs_conversion:
+            return None
+
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix='.xlsx')
+        os.close(tmp_fd)
+        with pd.ExcelWriter(tmp_path, engine='openpyxl') as writer:
+            for sheet_name, df in sheets_data.items():
+                df.to_excel(writer, sheet_name=sheet_name, index=False)
+        return tmp_path
+
+    except Exception:
+        return None  # se fallisce, usa il file originale
 
 
 def run_calculation(
@@ -65,16 +157,8 @@ def run_calculation(
     tour_operators_to_check = tour_operators - aliservice_managed
 
     # Mappa i tour operator trovati ai loro nomi normalizzati
+    # (solo prima occorrenza per modulo — usato per foglio TourOperatourRilevati)
     found_tour_operators: Dict[str, dict] = {}
-    for to_name in tour_operators_to_check:
-        folder_path = find_tour_operator_folder(to_name)
-        if folder_path:
-            module_name = get_tour_operator_module_name(to_name)
-            if module_name:
-                found_tour_operators[module_name] = {
-                    'original_name': to_name,
-                    'folder': folder_path,
-                }
 
     all_detail_dfs = []
     all_totals_dfs = []
@@ -86,24 +170,38 @@ def run_calculation(
         round_night_mode, round_night_step, holiday_dates,
     )
 
-    # Prepara lista tour operator da elaborare
+    # Prepara lista tour operator da elaborare:
+    # FIX — un entry per ogni TO rilevato (no deduplication per modulo)
+    # e to_keyword = nome reale del TO nel file Excel
     tour_operators_to_process = []
     warnings_list = []
 
-    for module_name, to_info in found_tour_operators.items():
-        if module_name in tour_operator_processors:
-            processor = tour_operator_processors[module_name]
-            if processor['available'] and processor['config_class'] and processor['process_func']:
-                tour_operators_to_process.append({
-                    'name': to_info['original_name'],
-                    'module_name': module_name,
-                    'processor': processor,
-                    'is_aliservice': False,
-                })
-            else:
-                warnings_list.append(
-                    f"{to_info['original_name']} rilevato ma modulo non disponibile."
-                )
+    for to_name in sorted(tour_operators_to_check):
+        folder_path = find_tour_operator_folder(to_name)
+        if folder_path:
+            module_name = get_tour_operator_module_name(to_name)
+            if module_name:
+                # Tieni solo la prima occorrenza per il foglio di riepilogo
+                if module_name not in found_tour_operators:
+                    found_tour_operators[module_name] = {
+                        'original_name': to_name,
+                        'folder': folder_path,
+                    }
+                # Aggiungi SEMPRE un entry separato per ogni TO rilevato
+                if module_name in tour_operator_processors:
+                    processor = tour_operator_processors[module_name]
+                    if processor['available'] and processor['config_class'] and processor['process_func']:
+                        tour_operators_to_process.append({
+                            'name': to_name,
+                            'module_name': module_name,
+                            'processor': processor,
+                            'to_keyword': to_name.lower(),  # FIX: usa nome reale dal file
+                            'is_aliservice': False,
+                        })
+                    else:
+                        warnings_list.append(
+                            f"{to_name} rilevato ma modulo non disponibile."
+                        )
 
     # Aggiungi Aliservice se presente
     if aliservice_found and 'aliservice' in tour_operator_processors:
@@ -113,6 +211,7 @@ def run_calculation(
                 'name': 'Aliservice',
                 'module_name': 'aliservice',
                 'processor': processor,
+                'to_keyword': 'aliservice',
                 'is_aliservice': True,
             })
         else:
@@ -137,8 +236,28 @@ def run_calculation(
     for to_info in tour_operators_to_process:
         processor = to_info['processor']
         try:
-            cfg = processor['config_class'](**processor['config_kwargs']())
-            detail, totals, discr = processor['process_func']([tmp_path], cfg)
+            # FIX 1: inietta extract_atd_candidates nel namespace del modulo se mancante
+            if _extract_atd_candidates is not None:
+                module_name_str = processor['process_func'].__module__
+                mod = sys.modules.get(module_name_str)
+                if mod and not hasattr(mod, 'extract_atd_candidates'):
+                    setattr(mod, 'extract_atd_candidates', _extract_atd_candidates)
+
+            config_kwargs = processor['config_kwargs']()
+            config_kwargs['to_keyword'] = to_info['to_keyword']
+            cfg = processor['config_class'](**config_kwargs)
+
+            # FIX 2: per moduli old-format, pre-converte Excel nuovo formato → vecchio formato
+            compat_path = None
+            if to_info['module_name'] not in _NEW_FORMAT_MODULES:
+                compat_path = _make_compat_excel(tmp_path)
+
+            process_path = compat_path if compat_path else tmp_path
+            detail, totals, discr = processor['process_func']([process_path], cfg)
+
+            if compat_path and os.path.exists(compat_path):
+                os.unlink(compat_path)
+
             all_detail_dfs.append(detail)
             all_totals_dfs.append(totals)
             all_discr_dfs.append(discr)
