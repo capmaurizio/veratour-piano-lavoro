@@ -211,16 +211,32 @@ def detect_tour_operators(file_path: str) -> Tuple[Set[str], Set[str]]:
     return tour_operators, aliservice_managed
 
 
+# Alias noti: varianti ortografiche del TO nel file → nome cartella normalizzato
+# Es: "CAPOVERDE TIME" → clean="capoverdetime" ma cartella si chiama "Caboverdetime"
+_FOLDER_ALIASES: Dict[str, str] = {
+    'capoverdetime': 'caboverdetime',
+    'capoverde':     'caboverdetime',
+}
+
+
 def find_tour_operator_folder(to_name: str, base_path: str = ".") -> Optional[str]:
     """Cerca la cartella del tour operator con file consuntivo*.py."""
     to_clean = re.sub(r'[^a-zA-Z]', '', to_name).lower()
+    # Risolvi alias noti (es. capoverdetime → caboverdetime)
+    to_clean_resolved = _FOLDER_ALIASES.get(to_clean, to_clean)
 
     if os.path.exists(base_path):
         for item in os.listdir(base_path):
             item_path = os.path.join(base_path, item)
             if os.path.isdir(item_path):
                 item_clean = re.sub(r'[^a-zA-Z]', '', item).lower()
-                if item_clean == to_clean or to_clean in item_clean or item_clean in to_clean:
+                match = (
+                    item_clean == to_clean or to_clean in item_clean or item_clean in to_clean
+                    or item_clean == to_clean_resolved
+                    or to_clean_resolved in item_clean
+                    or item_clean in to_clean_resolved
+                )
+                if match:
                     if os.path.exists(item_path):
                         for file in os.listdir(item_path):
                             if file.startswith('consuntivo') and file.endswith('.py'):
@@ -235,11 +251,11 @@ def get_tour_operator_module_name(to_name: str) -> Optional[str]:
 
     if 'baobab' in to_clean or to_clean == 'th':
         return 'baobab'
-    elif 'micheltours' in to_clean or 'michel tours' in to_clean:
+    elif 'micheltour' in to_clean:          # fix: cattura sia MICHELTOUR che MICHELTOURS
         return 'micheltours'
     elif 'aliservice' in to_clean:
         return 'aliservice'
-    elif 'caboverdetime' in to_clean:
+    elif 'caboverdetime' in to_clean or 'capoverde' in to_clean:  # fix: CAPOVERDE TIME
         return 'caboverdetime'
     elif 'sand' in to_clean:
         return 'sand'
