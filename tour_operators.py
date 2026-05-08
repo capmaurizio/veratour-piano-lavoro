@@ -16,6 +16,7 @@ _BASE = os.path.dirname(os.path.abspath(__file__))
 _TO_DIRS = [
     'Veratour', 'Alpitour', 'Aliservice', 'Baobab',
     'Domina', 'MICHELTOURS', ' Sand', 'Caboverdetime', 'Rusconi',
+    'IOT', 'Flyness', 'Rodocanachi',
 ]
 for d in _TO_DIRS:
     p = os.path.join(_BASE, d)
@@ -139,6 +140,45 @@ except ImportError:
     process_files_sand = None
     write_output_excel_sand = None
 
+try:
+    from consuntivoiot import (
+        CalcConfig as IotCalcConfig,
+        process_files as process_files_iot,
+        write_output_excel as write_output_excel_iot,
+    )
+    IOT_AVAILABLE = True
+except ImportError:
+    IOT_AVAILABLE = False
+    IotCalcConfig = None
+    process_files_iot = None
+    write_output_excel_iot = None
+
+try:
+    from consuntivoflyness import (
+        CalcConfig as FlynessCalcConfig,
+        process_files as process_files_flyness,
+        write_output_excel as write_output_excel_flyness,
+    )
+    FLYNESS_AVAILABLE = True
+except ImportError:
+    FLYNESS_AVAILABLE = False
+    FlynessCalcConfig = None
+    process_files_flyness = None
+    write_output_excel_flyness = None
+
+try:
+    from consuntivordocanachi import (
+        CalcConfig as RodocanachCalcConfig,
+        process_files as process_files_rodocanachi,
+        write_output_excel as write_output_excel_rodocanachi,
+    )
+    RODOCANACHI_AVAILABLE = True
+except ImportError:
+    RODOCANACHI_AVAILABLE = False
+    RodocanachCalcConfig = None
+    process_files_rodocanachi = None
+    write_output_excel_rodocanachi = None
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Funzioni di utilità
@@ -251,11 +291,11 @@ def get_tour_operator_module_name(to_name: str) -> Optional[str]:
 
     if 'baobab' in to_clean or to_clean == 'th':
         return 'baobab'
-    elif 'micheltour' in to_clean:          # fix: cattura sia MICHELTOUR che MICHELTOURS
+    elif 'micheltour' in to_clean:
         return 'micheltours'
     elif 'aliservice' in to_clean:
         return 'aliservice'
-    elif 'caboverdetime' in to_clean or 'capoverde' in to_clean:  # fix: CAPOVERDE TIME
+    elif 'caboverdetime' in to_clean or 'capoverde' in to_clean:
         return 'caboverdetime'
     elif 'sand' in to_clean:
         return 'sand'
@@ -267,6 +307,12 @@ def get_tour_operator_module_name(to_name: str) -> Optional[str]:
         return 'alpitour'
     elif 'veratour' in to_clean:
         return 'veratour'
+    elif 'iot' in to_clean:
+        return 'iot'
+    elif 'flyness' in to_clean:
+        return 'flyness'
+    elif 'rodocanachi' in to_clean:
+        return 'rodocanachi'
 
     return to_clean
 
@@ -381,6 +427,42 @@ def get_tour_operator_processors(apt_filter, night_mode, round_extra_mode,
             'config_class': RusconiCalcConfig,
             'process_func': process_files_rusconi,
             'write_func': write_output_excel_rusconi,
+            'config_kwargs': lambda: {
+                'apt_filter': apt_filter if apt_filter else None,
+                'rounding_extra': RoundingPolicy("NONE", 5),
+                'rounding_night': RoundingPolicy("NONE", 5),
+                'holiday_dates': holiday_dates,
+            }
+        },
+        'iot': {
+            'available': IOT_AVAILABLE,
+            'config_class': IotCalcConfig,
+            'process_func': process_files_iot,
+            'write_func': write_output_excel_iot,
+            'config_kwargs': lambda: {
+                'apt_filter': apt_filter if apt_filter else None,
+                'rounding_extra': RoundingPolicy("NONE", 5),
+                'rounding_night': RoundingPolicy("NONE", 5),
+                'holiday_dates': holiday_dates,
+            }
+        },
+        'flyness': {
+            'available': FLYNESS_AVAILABLE,
+            'config_class': FlynessCalcConfig,
+            'process_func': process_files_flyness,
+            'write_func': write_output_excel_flyness,
+            'config_kwargs': lambda: {
+                'apt_filter': apt_filter if apt_filter else None,
+                'rounding_extra': RoundingPolicy("NONE", 5),
+                'rounding_night': RoundingPolicy("NONE", 5),
+                'holiday_dates': holiday_dates,
+            }
+        },
+        'rodocanachi': {
+            'available': RODOCANACHI_AVAILABLE,
+            'config_class': RodocanachCalcConfig,
+            'process_func': process_files_rodocanachi,
+            'write_func': write_output_excel_rodocanachi,
             'config_kwargs': lambda: {
                 'apt_filter': apt_filter if apt_filter else None,
                 'rounding_extra': RoundingPolicy("NONE", 5),
