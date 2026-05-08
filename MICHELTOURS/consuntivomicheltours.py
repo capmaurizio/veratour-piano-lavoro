@@ -734,7 +734,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
     # Converti blocchi in DataFrame per output
     rows_detail = []
 
-    for key, b in sorted(blocks.items(), key=lambda kv: (kv[1].date, kv[1].apt, kv[1].first_source.original_order)):
+    for key, b in sorted(blocks.items(), key=lambda kv: kv[1].first_source.original_order if kv[1].first_source else 0):
         # MICHELTOURS: START = STD - 2:30 (come Domina/Baobab)
         # Se STD non disponibile, usa TURNO come fallback o segnala errore
         std_sel = b.std_list[0] if b.std_list else None

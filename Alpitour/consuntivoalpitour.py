@@ -878,13 +878,46 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
 
                 sdf["__to_s"]  = sdf[_to_c].apply(_ss) if _to_c else ""
                 sdf["__as_s"]  = sdf[_ass_c].apply(_ss) if _ass_c else ""
-                sdf["__gk"]    = (sdf["__date"].astype(str)+"|"+sdf["__to_s"]+"|"+
-                                  sdf[cols["apt"]].apply(_ss)+"|"+sdf["__as_s"])
+                sdf["__apt_s"] = sdf[cols["apt"]].apply(_ss)
 
-                sdf["__ini_f"] = sdf[_inizio_c].replace("", np.nan)
-                sdf["__fin_f"] = sdf[_fine_c].replace("", np.nan)
-                sdf["__ini_f"] = sdf.groupby("__gk")["__ini_f"].ffill()
-                sdf["__fin_f"] = sdf.groupby("__gk")["__fin_f"].ffill()
+                # ── SOLUZIONE ORDER-BASED (identica a Veratour) ───────────────────
+                # Scan sequenziale: propaga assistente/inizio/fine dalla master alle slave.
+                # La chiave include INIZIO TURNO per distinguere turni diversi stesso giorno.
+                def _is_m(row):
+                    v = row[_inizio_c]
+                    try:
+                        if pd.isna(v): return False
+                    except Exception:
+                        pass
+                    return str(v).strip().lower() not in ("", "nan", "none", "nat")
+
+                _last_m = {}  # grp_base → {ass, ini, fin}
+                _ini_v, _fin_v, _ass_v = [], [], []
+                for _, _row in sdf.iterrows():
+                    _gb = str(_row["__date"]) + "|" + _row["__to_s"] + "|" + _row["__apt_s"]
+                    if _is_m(_row):
+                        _last_m[_gb] = {"ass": _row["__as_s"], "ini": _row[_inizio_c], "fin": _row[_fine_c]}
+                        _ini_v.append(_row[_inizio_c]); _fin_v.append(_row[_fine_c]); _ass_v.append(_row["__as_s"])
+                    else:
+                        _m = _last_m.get(_gb)
+                        if _m:
+                            _ini_v.append(_m["ini"]); _fin_v.append(_m["fin"])
+                            _ass_v.append(_m["ass"] if _m["ass"] else _row["__as_s"])
+                        else:
+                            # Fallback STD-2h30 per righe orfane
+                            _fb_ini, _fb_fin = np.nan, np.nan
+                            if _std_c and _std_c in _row.index:
+                                import datetime as _dt2
+                                _sp = parse_time_value(_row[_std_c])
+                                if _sp:
+                                    _sm2 = (_sp[0]*60+_sp[1]-150) % 1440
+                                    _fb_ini = _dt2.time(_sm2//60, _sm2%60)
+                                    _fb_fin = _dt2.time(_sp[0], _sp[1])
+                            _ini_v.append(_fb_ini); _fin_v.append(_fb_fin); _ass_v.append(_row["__as_s"])
+
+                sdf["__ini_f"] = _ini_v
+                sdf["__fin_f"] = _fin_v
+                sdf["__as_s"]  = _ass_v
                 sdf = sdf[sdf["__ini_f"].notna() & sdf["__fin_f"].notna()].copy()
 
                 if not sdf.empty:
@@ -915,10 +948,11 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                             _d   = _r["__date"]
                             _apt = _ss(_r[cols["apt"]])
                             _to  = _ss(_r[_to_c]) if _to_c else ""
-                            _as  = _ss(_r[_ass_c]) if _ass_c else ""
+                            _as  = _r["__as_s"]  # già propagato
                             _sh,_sm = _r["__shm"]; _eh,_em = _r["__ehm"]
                             _tn  = f"{_sh:02d}:{_sm:02d}-{_eh:02d}:{_em:02d}"
-                            _key = (_d, _to, _apt, _as)
+                            # Chiave con INIZIO per distinguere turni diversi stesso giorno
+                            _key = (_d, _to, _apt, _as, f"{_sh:02d}:{_sm:02d}")
 
                             _atdt = []
                             if cols.get("atd"):
@@ -951,7 +985,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                                     turno_raw_ffill=_tn, turno_norm=_tn,
                                     start_dt=_r["__start_dt"], end_dt=_r["__end_dt"],
                                     no_dec=False, atd_list=_atdt.copy(),
-                                    std_list=[],  # FIX: campo richiesto, STD già in atd_list nel nuovo formato
+                                    std_list=[],
                                     festivo_flag=bool(_r["__festivo"]), first_source=_src,
                                     assistente=_as or None,
                                     volo=_vv or None, destinazione=_dv or None,
@@ -965,6 +999,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                                 _b.festivo_flag = _b.festivo_flag or bool(_r["__festivo"])
                                 if _src.original_order < _b.first_source.original_order:
                                     _b.first_source = _src
+
                 continue  # nuovo formato processato — salta il vecchio codice sotto
 
             # ── VECCHIO FORMATO (TURNO stringa) — codice originale ───────────
@@ -1124,7 +1159,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
     rows_detail = []
     rows_discr = []
 
-    for key, b in sorted(blocks.items(), key=lambda kv: (kv[1].date, kv[1].apt, kv[1].first_source.original_order)):
+    for key, b in sorted(blocks.items(), key=lambda kv: kv[1].first_source.original_order if kv[1].first_source else 0):
         # Se c'è un errore, metti tutti i valori a zero
         if b.errore:
             rows_detail.append({

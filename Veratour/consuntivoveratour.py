@@ -641,21 +641,96 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                     s = str(v).strip() if pd.notna(v) else ""
                     return "" if s.lower() in ("nan", "none") else s
 
-                # Costruisci chiave di gruppo per forward-fill
-                sdf["__to_str"]   = sdf[to_col].apply(_safe_str) if to_col else ""
-                sdf["__ass_str"]  = sdf[ass_col].apply(_safe_str) if ass_col else ""
-                sdf["__grp_key"]  = (
+                sdf["__to_str"]  = sdf[to_col].apply(_safe_str) if to_col else ""
+                sdf["__apt_str"] = sdf[cols["apt"]].apply(_safe_str)
+                sdf["__ass_str"] = sdf[ass_col].apply(_safe_str) if ass_col else ""
+
+                # ── SOLUZIONE B: pairing per prossimità (order-based) ─────────────
+                # Ogni riga slave (INIZIO TURNO vuoto) si aggancia alla riga master
+                # che la precede immediatamente nello stesso DATA+TO+APT, ereditandone
+                # assistente, INIZIO TURNO e FINE TURNO.
+                # Questo rispecchia la convenzione del compilatore: le righe slave
+                # (voli aggiuntivi dello stesso turno) seguono sempre la riga master
+                # senza ripetere INIZIO/FINE/ASSISTENTE.
+                # ─────────────────────────────────────────────────────────────────
+
+                def _is_master(row):
+                    """Riga master = ha INIZIO TURNO valorizzato."""
+                    v = row[inizio_col]
+                    return pd.notna(v) and str(v).strip().lower() not in ("", "nan", "none", "nat")
+
+                # Scan sequenziale: propaga assistente/inizio/fine dalla master alle slave
+                last_master: dict = {}   # grp_base → {ass, ini, fin}
+                inizio_ffill_vals = []
+                fine_ffill_vals   = []
+                ass_ffill_vals    = []
+
+                for _, row in sdf.iterrows():
+                    grp_base = (
+                        str(row["__date"]) + "|" +
+                        row["__to_str"] + "|" +
+                        row["__apt_str"]
+                    )
+                    if _is_master(row):
+                        # Nuova riga master: aggiorna l'ultimo master per questo gruppo
+                        last_master[grp_base] = {
+                            "ass": row["__ass_str"],
+                            "ini": row[inizio_col],
+                            "fin": row[fine_col],
+                        }
+                        inizio_ffill_vals.append(row[inizio_col])
+                        fine_ffill_vals.append(row[fine_col])
+                        ass_ffill_vals.append(row["__ass_str"])
+                    else:
+                        # Riga slave: eredita dalla master più recente nello stesso gruppo
+                        master = last_master.get(grp_base)
+                        if master:
+                            inizio_ffill_vals.append(master["ini"])
+                            fine_ffill_vals.append(master["fin"])
+                            ass_ffill_vals.append(master["ass"] if master["ass"] else row["__ass_str"])
+                        else:
+                            # Nessun master trovato: riga "orfana" con INIZIO/FINE mancanti.
+                            # Fallback: se STD è disponibile, usa STD-2h30 → STD come turno.
+                            # Questo gestisce il caso in cui il compilatore ha inserito solo
+                            # STD/ATD senza compilare INIZIO/FINE (es. NAP 10 aprile).
+                            fallback_ini = np.nan
+                            fallback_fin = np.nan
+                            if std_col and std_col in row.index:
+                                std_p = parse_time_value(row[std_col])
+                                if std_p:
+                                    std_total_m = std_p[0] * 60 + std_p[1]
+                                    ini_total_m = (std_total_m - 150) % 1440  # STD - 2h30
+                                    import datetime as _dt
+                                    fallback_ini = _dt.time(ini_total_m // 60, ini_total_m % 60)
+                                    fallback_fin = _dt.time(std_p[0], std_p[1])
+                            inizio_ffill_vals.append(fallback_ini)
+                            fine_ffill_vals.append(fallback_fin)
+                            ass_ffill_vals.append(row["__ass_str"])
+
+                sdf["__inizio_ffill"] = inizio_ffill_vals
+                sdf["__fine_ffill"]   = fine_ffill_vals
+                sdf["__ass_str"]      = ass_ffill_vals
+
+                # Chiave blocco completa: include INIZIO TURNO per distinguere
+                # due turni dello stesso assistente nello stesso giorno/APT/TO.
+                # La slave eredita __inizio_ffill dalla sua master → stessa chiave.
+                def _fmt_ini(v):
+                    try:
+                        if pd.isna(v): return ''
+                    except Exception:
+                        pass
+                    if hasattr(v, 'strftime'): return v.strftime('%H:%M')
+                    if hasattr(v, 'hour'): return f"{v.hour:02d}:{v.minute:02d}"
+                    return str(v)[:5]
+
+                sdf["__inizio_str"] = sdf["__inizio_ffill"].apply(_fmt_ini)
+                sdf["__grp_key"] = (
                     sdf["__date"].astype(str) + "|" +
                     sdf["__to_str"] + "|" +
-                    sdf[cols["apt"]].apply(_safe_str) + "|" +
-                    sdf["__ass_str"]
+                    sdf["__apt_str"] + "|" +
+                    sdf["__ass_str"] + "|" +
+                    sdf["__inizio_str"]
                 )
-
-                # Forward-fill inizio/fine turno dalla riga master alle righe slave
-                sdf["__inizio_ffill"] = sdf[inizio_col].replace("", np.nan)
-                sdf["__fine_ffill"]   = sdf[fine_col].replace("", np.nan)
-                sdf["__inizio_ffill"] = sdf.groupby("__grp_key")["__inizio_ffill"].ffill()
-                sdf["__fine_ffill"]   = sdf.groupby("__grp_key")["__fine_ffill"].ffill()
 
                 # Scarta righe senza master (nessun inizio/fine nel blocco)
                 sdf = sdf[sdf["__inizio_ffill"].notna() & sdf["__fine_ffill"].notna()].copy()
@@ -700,21 +775,58 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                     d       = r["__date"]
                     apt     = _safe_str(r[cols["apt"]])
                     to_str  = _safe_str(r[to_col]) if to_col else ""
-                    ass_str = _safe_str(r[ass_col]) if ass_col else ""
+                    # FIX: usa __ass_str (propagato dal ffill order-based) non ass_col originale
+                    ass_str = r["__ass_str"]  # già propagato alle righe slave
 
                     # Rappresentazione testuale del turno per output
                     sh, sm = r["__start_hhmm"]
                     eh, em = r["__end_hhmm"]
                     turno_norm = f"{sh:02d}:{sm:02d}-{eh:02d}:{em:02d}"
 
-                    # Chiave blocco nuovo formato: DATA + TO + APT + ASSISTENTE
-                    key = (d, to_str, apt, ass_str)
+                    # Chiave blocco: DATA + TO + APT + ASSISTENTE + INIZIO TURNO
+                    # L'INIZIO distingue due turni dello stesso assistente nello stesso giorno.
+                    inizio_str = f"{sh:02d}:{sm:02d}"  # già calcolato da __start_hhmm
+                    key = (d, to_str, apt, ass_str, inizio_str)
+
+
+                    # ── FIX NUOVO FORMATO 2026: FINE TURNO = ATD ──────────────────
+                    # Nel nuovo formato, alcuni compilatori inseriscono in "FINE TURNO"
+                    # l'orario reale di decollo (ATD) invece dell'orario programmato (STD).
+                    # In questo caso FINE TURNO = ATD → extra calcolati = 0 (sbagliato).
+                    # Soluzione: se ATD = FINE TURNO e STD è disponibile e STD < FINE TURNO,
+                    # usiamo STD come fine turno programmata per il calcolo degli extra,
+                    # e l'ATD rimane il candidato per gli extra (ATD > STD → extra positivi).
+                    # ─────────────────────────────────────────────────────────────────
+                    end_dt_blocco = r["__end_dt"]
+                    fine_turno_coincide_con_atd = False
+
+                    if std_col and std_col in r.index and cols["atd"]:
+                        std_parsed_val = parse_time_value(r[std_col])
+                        atd_raw_list   = extract_atd_candidates(r[cols["atd"]])
+                        if std_parsed_val and atd_raw_list:
+                            # Confronta FINE TURNO con ATD (in minuti assoluti)
+                            fine_min = eh * 60 + em
+                            for atd_hh, atd_mm in atd_raw_list:
+                                if atd_hh * 60 + atd_mm == fine_min:
+                                    # FINE TURNO = ATD: verifica che STD < ATD
+                                    std_min = std_parsed_val[0] * 60 + std_parsed_val[1]
+                                    if std_min < fine_min:
+                                        # Usa STD come fine turno programmata
+                                        end_dt_blocco = d + pd.Timedelta(
+                                            hours=std_parsed_val[0], minutes=std_parsed_val[1]
+                                        )
+                                        if end_dt_blocco < r["__start_dt"]:
+                                            end_dt_blocco += pd.Timedelta(days=1)
+                                        fine_turno_coincide_con_atd = True
+                                    break
 
                     # ATD candidates da questa riga (raccoglie da TUTTE le righe del blocco)
                     atd_times: List[Tuple[int, int]] = []
                     if cols["atd"]:
                         atd_times.extend(extract_atd_candidates(r[cols["atd"]]))
-                    if std_col and std_col in r.index:
+                    # Aggiunge STD come fallback SOLO se FINE TURNO != ATD
+                    # (se coincide, STD è già usato come end_dt_blocco: non serve come candidato)
+                    if std_col and std_col in r.index and not fine_turno_coincide_con_atd:
                         std_parsed = parse_time_value(r[std_col])
                         if std_parsed:
                             atd_times.append(std_parsed)
@@ -724,15 +836,9 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                         tdt = d + pd.Timedelta(hours=hh, minutes=mm)
                         if tdt < r["__start_dt"]:
                             tdt += pd.Timedelta(days=1)
-                        if std_col and std_col in r.index:
-                            std_parsed = parse_time_value(r[std_col])
-                            if std_parsed:
-                                std_tdt = d + pd.Timedelta(hours=std_parsed[0], minutes=std_parsed[1])
-                                if std_tdt < r["__start_dt"]:
-                                    std_tdt += pd.Timedelta(days=1)
-                                if tdt < std_tdt - pd.Timedelta(hours=2):
-                                    continue
-                        atd_dt_list.append(tdt)
+                        # ATD deve essere > end_dt_blocco per generare extra
+                        if tdt > end_dt_blocco:
+                            atd_dt_list.append(tdt)
 
                     src = SourceRowRef(
                         file=file_path, sheet=sheet_name,
@@ -758,7 +864,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                             turno_raw_ffill=turno_norm,
                             turno_norm=turno_norm,
                             start_dt=r["__start_dt"],
-                            end_dt=r["__end_dt"],
+                            end_dt=end_dt_blocco,
                             no_dec=False,
                             atd_list=atd_dt_list.copy(),
                             festivo_flag=bool(r["__festivo"]),
@@ -925,7 +1031,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
     rows_detail = []
     rows_discr = []
 
-    for key, b in sorted(blocks.items(), key=lambda kv: (kv[1].date, kv[1].apt, kv[1].first_source.original_order)):
+    for key, b in sorted(blocks.items(), key=lambda kv: kv[1].first_source.original_order if kv[1].first_source else 0):
         durata_min = int((b.end_dt - b.start_dt).total_seconds() // 60)
 
         # Turno €
@@ -1116,13 +1222,32 @@ def create_apt_detail_sheet(df_apt: pd.DataFrame) -> pd.DataFrame:
     df_apt['DURATA_H:MM'] = df_apt['DURATA_TURNO_MIN'].apply(format_minutes_to_hmm)
     df_apt['EXTRA_H:MM'] = df_apt['EXTRA_MIN'].apply(format_minutes_to_hmm)
     df_apt['NOTTE_H:MM'] = df_apt['NOTTE_MIN'].apply(format_minutes_to_hmm)
-    
+
+    # Formatta ATD_SCELTO come HH:MM (Decollo effettivo)
+    def _fmt_atd(v):
+        try:
+            if pd.isna(v):
+                return ''
+        except Exception:
+            pass
+        if hasattr(v, 'strftime'):
+            return v.strftime('%H:%M')
+        s = str(v).strip()
+        return s[:5] if s and s != 'nan' and s != 'None' else ''
+
+    decollo_series = (
+        df_apt['ATD_SCELTO'].apply(_fmt_atd)
+        if 'ATD_SCELTO' in df_apt.columns
+        else pd.Series([''] * len(df_apt))
+    )
+
     # Create output DataFrame
     output_cols = {
         'Data': df_apt['DATA'],
         'Tour Operator': df_apt['TOUR OPERATOR'].fillna('') if 'TOUR OPERATOR' in df_apt.columns else pd.Series([''] * len(df_apt)),
         'Turno': df_apt['TURNO_NORMALIZZATO'],
         'Volo': df_apt['VOLO'].fillna('') if 'VOLO' in df_apt.columns else pd.Series([''] * len(df_apt)),
+        'Decollo': decollo_series,
         'Dest.ne': df_apt['DEST.NE'].fillna('') if 'DEST.NE' in df_apt.columns else pd.Series([''] * len(df_apt)),
         'Durata': df_apt['DURATA_H:MM'],
         'Turno (€)': df_apt['TURNO_EUR'].round(2),
@@ -1152,6 +1277,7 @@ def create_apt_detail_sheet(df_apt: pd.DataFrame) -> pd.DataFrame:
         'Tour Operator': '',
         'Turno': '',
         'Volo': '',
+        'Decollo': '',
         'Dest.ne': '',
         'Durata': '',
         'Turno (€)': df_apt['TURNO_EUR'].sum(),
