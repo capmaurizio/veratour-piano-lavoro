@@ -394,7 +394,7 @@ def process_files(input_files:List[str], cfg:CalcConfig):
         tn=b.turno_norm
         rows.append({
             "DATA":b.date.strftime("%d/%m/%Y") if pd.notna(b.date) else "",
-            "APT":b.apt,"TOUR OPERATOR":b.apt,
+            "APT":b.apt,"TOUR OPERATOR":"Rodocanachi",
             "ASSISTENTE":b.assistente or "","VOLO":b.volo or "",
             "DEST.NE":b.destinazione or "",
             "TURNO_FFILL":b.turno_raw_ffill,"TURNO_NORMALIZZATO":tn,
