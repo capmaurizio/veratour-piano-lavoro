@@ -623,6 +623,12 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
 
             # Iterate rows and aggregate by block
             for idx, r in sdf.iterrows():
+                # Estrai ATD raw (vecchio formato)
+                atd_raw_val = ""
+                if cols.get("atd") and pd.notna(r.get(cols["atd"], None)):
+                    _s = str(r[cols["atd"]]).strip()
+                    if _s.lower() not in ("nan", "none"):
+                        atd_raw_val = _s
                 d = r["__date"]
                 apt = str(r[cols["apt"]]).strip() if cols["apt"] else ""
                 turno_norm = str(r["__turno_norm"]).strip() if pd.notna(r.get("__turno_norm")) else ""
