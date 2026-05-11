@@ -37,3 +37,9 @@ Thumbs.db
 streamlit.log
 streamlit.pid
 
+
+# Script temporanei di patch e diagnosi
+diagnosi_*.py
+fix_*.py
+patch_*.py
+test_fix_*.py
