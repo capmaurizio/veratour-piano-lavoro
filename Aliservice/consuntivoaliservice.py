@@ -605,6 +605,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                                     atd_raw_val = _s
 
                             _atdt = []
+                            _stdt = []  # STD separato
                             if cols.get("atd"):
                                 _ap = parse_time_value(_r[cols["atd"]])
                                 if _ap:
@@ -616,7 +617,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                                 if _sp:
                                     _tdt = _d + pd.Timedelta(hours=_sp[0], minutes=_sp[1])
                                     if _tdt < _r["__start_dt"]: _tdt += pd.Timedelta(days=1)
-                                    _atdt.append(_tdt)
+                                    _stdt.append(_tdt)  # STD in lista separata
 
                             _src = SourceRowRef(file=file_path, sheet=sheet_name,
                                                 row_index=int(_r["__sheet_row_order"]),
@@ -630,7 +631,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                                     turno_raw_ffill=_tn, turno_norm=_tn,
                                     start_dt=_r["__start_dt"], end_dt=_r["__end_dt"],
                                     durata_min=int((_r["__end_dt"]-_r["__start_dt"]).total_seconds()/60),
-                                    no_dec=False, atd_list=_atdt.copy(), std_list=[],
+                                    no_dec=False, atd_list=_atdt.copy(), std_list=_stdt.copy(),
                                     atd_raw_list=[atd_raw_val] if atd_raw_val else [],
                                     festivo_flag=bool(_r["__festivo"]),
                                     first_source=_src,
