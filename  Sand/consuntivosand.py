@@ -555,6 +555,12 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                             _tn  = f"{_sh:02d}:{_sm:02d}-{_eh:02d}:{_em:02d}"
                             _key = (_d, _to, _apt, _as)
 
+                    atd_raw_val = ""
+                    if cols.get("atd") and pd.notna(r[cols["atd"]]):
+                        s = str(r[cols["atd"]]).strip()
+                        if s.lower() not in ("nan", "none"):
+                            atd_raw_val = s
+
                             _atdt = []
                             if cols.get("atd"):
                                 for _hh,_mm in extract_atd_candidates(_r[cols["atd"]]):
@@ -731,6 +737,8 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                 # Aggrega o crea nuovo blocco
                 if key in blocks:
                     b = blocks[key]
+                    if atd_raw_val and atd_raw_val not in b.atd_raw_list:
+                        b.atd_raw_list.append(atd_raw_val)
                     b.atd_list.extend(atd_dt_list)
                     b.std_list.extend(std_dt_list)
                     # Mantieni cvc_dt se non era già presente
@@ -876,6 +884,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
             "FINE_DT": end_sand if not pd.isna(end_sand) else b.end_dt,
             "DURATA_TURNO_MIN": durata_effettiva_min,
             "NO_DEC": "Sì" if b.no_dec else "No",
+            "ATD": ", ".join(filter(None, b.atd_raw_list)),
             "ATD_SCELTO": end_sand if not pd.isna(end_sand) else None,  # END = STD (regole aggiornate)
             "STD_SCELTO": std_sel,
             "TURNO_EUR": round(turno_eur, 2),
@@ -1164,7 +1173,7 @@ def write_output_excel(output_path: str, detail_df: pd.DataFrame, totals_df: pd.
             cols = [
                 "DATA", "APT", "TOUR OPERATOR", "ASSISTENTE", "TURNO_FFILL", "TURNO_NORMALIZZATO",
                 "INIZIO_DT", "FINE_DT", "DURATA_TURNO_MIN", "NO_DEC",
-                "ATD_SCELTO", "STD_SCELTO",
+                "ATD", "ATD_SCELTO", "STD_SCELTO",
                 "TURNO_EUR",
                 "EXTRA_MIN", "EXTRA_EUR",
                 "NOTTE_MIN", "NOTTE_EUR",

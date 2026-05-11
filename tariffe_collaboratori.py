@@ -1768,6 +1768,7 @@ def create_collaboratori_sheet(
             'TOUR OPERATOR': tour_operator if tour_operator else '',
             'ASSISTENTE': assistente,
             'VOLO': volo_val,
+            'ATD': row.get('ATD', ''),
             'TURNO': turno_normalizzato,
             'BASE_EUR': tariffe['base_eur'],
             'EXTRA_EUR': tariffe['extra_eur'],
@@ -1795,6 +1796,7 @@ def create_collaboratori_sheet(
     collaboratori_totals = df_calc.groupby(groupby_cols).agg({
         'TURNO': 'first',  # Prendi il primo turno (se più turni, prendi il primo)
         'VOLO': 'first',  # Prendi il primo volo (se più voli, prendi il primo)
+        'ATD': 'first',
         'BASE_EUR': 'sum',
         'EXTRA_EUR': 'sum',
         'EXTRA_MIN': 'sum',
@@ -1814,7 +1816,7 @@ def create_collaboratori_sheet(
     
     # Rinomina colonne nell'ordine corretto (dopo reset_index, le colonne aggregate sono in coda)
     # L'ordine dopo reset_index è: colonne groupby (DATA, APT, TOUR OPERATOR, ASSISTENTE) + colonne aggregate
-    collaboratori_totals.columns = list(collaboratori_totals.columns[:len(groupby_cols)]) + ['Turno', 'VOLO', 'Turno (€)', 'Extra (€)', 'Extra (min)', 'Notturno (€)', 'Notturno (min)', 'TOTALE (€)', '__BLOCCHI_COUNT', 'NOTE']
+    collaboratori_totals.columns = list(collaboratori_totals.columns[:len(groupby_cols)]) + ['Turno', 'VOLO', 'ATD', 'Turno (€)', 'Extra (€)', 'Extra (min)', 'Notturno (€)', 'Notturno (min)', 'TOTALE (€)', '__BLOCCHI_COUNT', 'NOTE']
     # Rinomina __BLOCCHI_COUNT in Blocchi
     collaboratori_totals = collaboratori_totals.rename(columns={'__BLOCCHI_COUNT': 'Blocchi'})
     
@@ -1835,12 +1837,12 @@ def create_collaboratori_sheet(
     # Riordina colonne (mantieni anche Extra (min) e Notturno (min) per i calcoli)
     if 'TOUR OPERATOR' in collaboratori_totals.columns:
         result = collaboratori_totals[[
-            'DATA', 'APT', 'TOUR OPERATOR', 'ASSISTENTE', 'VOLO', 'Turno', 'Blocchi', 'Turno (€)', 'Extra (h:mm)', 'Extra (€)', 
+            'DATA', 'APT', 'TOUR OPERATOR', 'ASSISTENTE', 'VOLO', 'ATD', 'Turno', 'Blocchi', 'Turno (€)', 'Extra (h:mm)', 'Extra (€)', 
             'Extra (min)', 'Notturno (h:mm)', 'Notturno (€)', 'Notturno (min)', 'TOTALE (€)', 'NOTE'
         ]].copy()
     else:
         result = collaboratori_totals[[
-            'DATA', 'APT', 'ASSISTENTE', 'VOLO', 'Turno', 'Blocchi', 'Turno (€)', 'Extra (h:mm)', 'Extra (€)', 
+            'DATA', 'APT', 'ASSISTENTE', 'VOLO', 'ATD', 'Turno', 'Blocchi', 'Turno (€)', 'Extra (h:mm)', 'Extra (€)', 
             'Extra (min)', 'Notturno (h:mm)', 'Notturno (€)', 'Notturno (min)', 'TOTALE (€)', 'NOTE'
         ]].copy()
     
@@ -2188,7 +2190,7 @@ def create_collaboratori_sheet(
     result = result.sort_values(sort_cols, ascending=[True, True, True, False] if len(sort_cols) > 3 else [True, True, False])
     
     # Rimuovi colonne Extra (min) e Notturno (min) dal risultato finale (mantieni solo h:mm)
-    cols_to_keep = ['DATA', 'APT', 'ASSISTENTE', 'VOLO', 'Turno', 'Blocchi', 'Turno (€)', 'Extra (h:mm)', 'Extra (€)', 
+    cols_to_keep = ['DATA', 'APT', 'ASSISTENTE', 'VOLO', 'ATD', 'Turno', 'Blocchi', 'Turno (€)', 'Extra (h:mm)', 'Extra (€)', 
                     'Notturno (h:mm)', 'Notturno (€)', 'TOTALE (€)']
     if 'TOUR OPERATOR' in result.columns:
         # Inserisci TOUR OPERATOR dopo APT
@@ -2256,7 +2258,7 @@ def create_airport_complete_sheets(
         ]
         
         # Aggiungi colonne opzionali se presenti
-        optional_cols = ["COMPAGNIA", "ATD_SCELTO", "STD_SCELTO", "NO_DEC", "ERRORE"]
+        optional_cols = ["COMPAGNIA", "ATD", "ATD_SCELTO", "STD_SCELTO", "NO_DEC", "ERRORE"]
         for col in optional_cols:
             if col in df_apt.columns:
                 cols_dettaglio.append(col)

@@ -420,7 +420,8 @@ class BlockAgg:
     tour_operator_originale: Optional[str] = None  # TOUR OPERATOR originale dalla riga
     passeggeri: Optional[int] = None  # Numero passeggeri per carte di imbarco
     volo: Optional[str] = None  # Numero volo
-    destinazione: Optional[str] = None  # Destinazione
+    destinazione: Optional[str] = None
+    atd_raw_list: List[str] = field(default_factory=list)  # Destinazione
     errore: Optional[str] = None  # Messaggio di errore se i dati non sono validi
 
 
@@ -548,6 +549,12 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                             _sh,_sm = _r["__shm"]; _eh,_em = _r["__ehm"]
                             _tn  = f"{_sh:02d}:{_sm:02d}-{_eh:02d}:{_em:02d}"
                             _key = (_d, _to, _apt, _as)
+
+                    atd_raw_val = ""
+                    if cols.get("atd") and pd.notna(r[cols["atd"]]):
+                        s = str(r[cols["atd"]]).strip()
+                        if s.lower() not in ("nan", "none"):
+                            atd_raw_val = s
 
                             _atdt = []
                             if cols.get("atd"):
@@ -725,6 +732,8 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                 # Aggrega o crea nuovo blocco
                 if key in blocks:
                     b = blocks[key]
+                    if atd_raw_val and atd_raw_val not in b.atd_raw_list:
+                        b.atd_raw_list.append(atd_raw_val)
                     b.atd_list.extend(atd_dt_list)
                     b.std_list.extend(std_dt_list)
                     # Mantieni passeggeri se non era già presente
@@ -869,6 +878,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
             "FINE_DT": end_rusconi if not pd.isna(end_rusconi) else b.end_dt,
             "DURATA_TURNO_MIN": durata_base_min + durata_extra_min,
             "NO_DEC": "Sì" if b.no_dec else "No",
+            "ATD": ", ".join(filter(None, b.atd_raw_list)),
             "ATD_SCELTO": atd_sel,
             "STD_SCELTO": std_sel,
             "PASSEGGERI": b.passeggeri if b.passeggeri is not None else 0,
@@ -1008,6 +1018,7 @@ def create_apt_detail_sheet(df_apt: pd.DataFrame) -> pd.DataFrame:
         'Tour Operator': df_apt['TOUR OPERATOR'].fillna('') if 'TOUR OPERATOR' in df_apt.columns else pd.Series([''] * len(df_apt)),
         'Turno': df_apt['TURNO_NORMALIZZATO'],
         'Volo': df_apt['VOLO'].fillna('') if 'VOLO' in df_apt.columns else pd.Series([''] * len(df_apt)),
+        'ATD': df_apt.get('ATD', pd.Series([''] * len(df_apt))),
         'Dest.ne': df_apt['DEST.NE'].fillna('') if 'DEST.NE' in df_apt.columns else pd.Series([''] * len(df_apt)),
         'Durata': df_apt['DURATA_H:MM'],
         'Turno (€)': df_apt['TURNO_EUR'].round(2),
@@ -1041,6 +1052,7 @@ def create_apt_detail_sheet(df_apt: pd.DataFrame) -> pd.DataFrame:
         'Tour Operator': '',
         'Turno': '',
         'Volo': '',
+        'ATD': df_apt.get('ATD', pd.Series([''] * len(df_apt))),
         'Dest.ne': '',
         'Durata': '',
         'Turno (€)': df_apt['TURNO_EUR'].sum(),
@@ -1174,7 +1186,7 @@ def write_output_excel(output_path: str, detail_df: pd.DataFrame, totals_df: pd.
             cols = [
                 "DATA", "APT", "TOUR OPERATOR", "ASSISTENTE", "VOLO", "DEST.NE", "TURNO_FFILL", "TURNO_NORMALIZZATO",
                 "INIZIO_DT", "FINE_DT", "DURATA_TURNO_MIN", "NO_DEC",
-                "ATD_SCELTO", "STD_SCELTO", "PASSEGGERI",
+                "ATD", "ATD_SCELTO", "STD_SCELTO", "PASSEGGERI",
                 "TURNO_EUR",
                 "EXTRA_MIN", "EXTRA_EUR",
                 "NOTTE_MIN", "NOTTE_EUR",

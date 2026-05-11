@@ -466,6 +466,7 @@ class BlockAgg:
     assistente: Optional[str] = None
     volo: Optional[str] = None
     destinazione: Optional[str] = None
+    atd_raw_list: List[str] = field(default_factory=list)
     # optional "provided" values from the first row (for discrepancy sheet)
     provided_importo: Optional[float] = None
     provided_extra_min: Optional[int] = None
@@ -788,6 +789,12 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                     inizio_str = f"{sh:02d}:{sm:02d}"  # già calcolato da __start_hhmm
                     key = (d, to_str, apt, ass_str, inizio_str)
 
+                    atd_raw_val = ""
+                    if cols.get("atd") and pd.notna(r[cols["atd"]]):
+                        s = str(r[cols["atd"]]).strip()
+                        if s.lower() not in ("nan", "none"):
+                            atd_raw_val = s
+
 
                     # ── FIX NUOVO FORMATO 2026: FINE TURNO = ATD ──────────────────
                     # Nel nuovo formato, alcuni compilatori inseriscono in "FINE TURNO"
@@ -872,12 +879,15 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                             assistente=ass_str or None,
                             volo=volo_val,
                             destinazione=dest_val,
+                            atd_raw_list=[atd_raw_val] if atd_raw_val else [],
                             provided_importo=prov_importo,
                             provided_extra_min=prov_extra_min,
                             provided_night_min=prov_night_min,
                         )
                     else:
                         b = blocks[key]
+                        if atd_raw_val and atd_raw_val not in b.atd_raw_list:
+                            b.atd_raw_list.append(atd_raw_val)
                         b.atd_list.extend(atd_dt_list)
                         b.festivo_flag = b.festivo_flag or bool(r["__festivo"])
                         if src.original_order < b.first_source.original_order:
@@ -1083,6 +1093,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
             "FINE_DT": b.end_dt,
             "DURATA_TURNO_MIN": durata_min,
             "NO_DEC": b.no_dec,
+            "ATD": ", ".join(filter(None, b.atd_raw_list)),
             "ATD_SCELTO": atd_sel,
             "TURNO_EUR": round(turno_eur, 2),
             "EXTRA_MIN_RAW": extra_min_raw,
@@ -1247,6 +1258,7 @@ def create_apt_detail_sheet(df_apt: pd.DataFrame) -> pd.DataFrame:
         'Tour Operator': df_apt['TOUR OPERATOR'].fillna('') if 'TOUR OPERATOR' in df_apt.columns else pd.Series([''] * len(df_apt)),
         'Turno': df_apt['TURNO_NORMALIZZATO'],
         'Volo': df_apt['VOLO'].fillna('') if 'VOLO' in df_apt.columns else pd.Series([''] * len(df_apt)),
+        'ATD': df_apt.get('ATD', pd.Series([''] * len(df_apt))),
         'Decollo': decollo_series,
         'Dest.ne': df_apt['DEST.NE'].fillna('') if 'DEST.NE' in df_apt.columns else pd.Series([''] * len(df_apt)),
         'Durata': df_apt['DURATA_H:MM'],
@@ -1277,6 +1289,7 @@ def create_apt_detail_sheet(df_apt: pd.DataFrame) -> pd.DataFrame:
         'Tour Operator': '',
         'Turno': '',
         'Volo': '',
+        'ATD': '',
         'Decollo': '',
         'Dest.ne': '',
         'Durata': '',
@@ -1643,7 +1656,7 @@ def write_output_excel(output_path: str, detail_df: pd.DataFrame, totals_df: pd.
             cols = [
                 "DATA", "APT", "TOUR OPERATOR", "ASSISTENTE", "VOLO", "DEST.NE", "TURNO_FFILL", "TURNO_NORMALIZZATO",
                 "INIZIO_DT", "FINE_DT", "DURATA_TURNO_MIN", "NO_DEC",
-                "ATD_SCELTO",
+                "ATD", "ATD_SCELTO",
                 "TURNO_EUR",
                 "EXTRA_MIN_RAW", "EXTRA_MIN", "EXTRA_H:MM", "EXTRA_EUR",
                 "NOTTE_MIN_RAW", "NOTTE_MIN", "NOTTE_EUR",

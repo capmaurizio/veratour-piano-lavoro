@@ -174,6 +174,7 @@ class BlockAgg:
     no_dec:bool; first_source:SourceRowRef
     atd_list:List[pd.Timestamp]
     std_list:List[pd.Timestamp]
+    atd_raw_list:List[str]=field(default_factory=list)
     festivo_flag:bool=False
     assistente:Optional[str]=None
     volo:Optional[str]=None
@@ -285,7 +286,9 @@ def process_files(input_files:List[str], cfg:CalcConfig):
                     _key=(_d,_to,_apt,_as,f"{_sh:02d}:{_sm:02d}")
 
                     _atdt=[]
+                    atd_raw_val = ""
                     if cols.get("atd"):
+                        atd_raw_val = _ss(_r[cols["atd"]])
                         for _hh,_mm in _extract_atd(_r[cols["atd"]]):
                             _tdt=_d+pd.Timedelta(hours=_hh,minutes=_mm)
                             if _tdt<_r["__start_dt"]: _tdt+=pd.Timedelta(days=1)
@@ -306,6 +309,7 @@ def process_files(input_files:List[str], cfg:CalcConfig):
                             start_dt=_r["__start_dt"],end_dt=_r["__end_dt"],
                             no_dec=False,first_source=_src,
                             atd_list=_atdt.copy(),std_list=_stdt.copy(),
+                            atd_raw_list=[atd_raw_val] if atd_raw_val else [],
                             festivo_flag=bool(_r["__festivo"]),
                             assistente=_as or None,
                             volo=_ss(_r[_vc]) if _vc and _vc in _r.index else None,
@@ -313,6 +317,8 @@ def process_files(input_files:List[str], cfg:CalcConfig):
                         )
                     else:
                         b=blocks[_key]
+                        if atd_raw_val and atd_raw_val not in b.atd_raw_list:
+                            b.atd_raw_list.append(atd_raw_val)
                         b.atd_list.extend(_atdt); b.std_list.extend(_stdt)
                         b.festivo_flag=b.festivo_flag or bool(_r["__festivo"])
                         if _src.original_order<b.first_source.original_order: b.first_source=_src
@@ -334,7 +340,9 @@ def process_files(input_files:List[str], cfg:CalcConfig):
                 key=(d,to_s,apt,ass,ini)
                 src=SourceRowRef(fp,sheet,int(r["__sheet_row_order"]),int(r["__global_order"]))
                 atd_list=[]
+                atd_raw_val = ""
                 if cols.get("atd"):
+                    atd_raw_val = _ss(r[cols["atd"]])
                     for hh,mm in _extract_atd(r[cols["atd"]]):
                         t=d+pd.Timedelta(hours=hh,minutes=mm)
                         if t<sdt: t+=pd.Timedelta(days=1)
@@ -349,9 +357,12 @@ def process_files(input_files:List[str], cfg:CalcConfig):
                 if key not in blocks:
                     blocks[key]=BlockAgg(date=d,apt=apt,turno_raw_ffill=tf,turno_norm=f"{ini}-{fin}",
                         start_dt=sdt,end_dt=edt,no_dec=False,first_source=src,
-                        atd_list=atd_list,std_list=std_list,assistente=ass or None)
+                        atd_list=atd_list,std_list=std_list,assistente=ass or None,
+                        atd_raw_list=[atd_raw_val] if atd_raw_val else [])
                 else:
                     b=blocks[key]; b.atd_list.extend(atd_list); b.std_list.extend(std_list)
+                    if atd_raw_val and atd_raw_val not in b.atd_raw_list:
+                        b.atd_raw_list.append(atd_raw_val)
                     if src.original_order<b.first_source.original_order: b.first_source=src
 
     # ── Calcola output ────────────────────────────────────────────────────
@@ -389,7 +400,8 @@ def process_files(input_files:List[str], cfg:CalcConfig):
             "TURNO_FFILL":b.turno_raw_ffill,"TURNO_NORMALIZZATO":tn,
             "INIZIO_DT":start_dt,"FINE_DT":end_dt,
             "DURATA_TURNO_MIN":int((end_dt-start_dt).total_seconds()/60) if pd.notna(end_dt) and pd.notna(start_dt) else 0,
-            "NO_DEC":"No","ATD_SCELTO":atd_sel,
+            "NO_DEC":"No","ATD": ", ".join(filter(None, b.atd_raw_list)),
+            "ATD_SCELTO":atd_sel,
             "TURNO_EUR":round(turno_eur,2),"EXTRA_MIN":extra_min,"EXTRA_EUR":extra_eur,
             "NOTTE_MIN":notte_min,"NOTTE_EUR":notte_eur,
             "FESTIVO":is_fes,"TOTALE_BLOCCO_EUR":totale,
@@ -444,7 +456,7 @@ def write_output_excel(output_path:str, detail_df:pd.DataFrame, totals_df:pd.Dat
     with pd.ExcelWriter(output_path,engine="openpyxl") as writer:
         if not detail_df.empty:
             cols=["DATA","APT","ASSISTENTE","VOLO","DEST.NE","TURNO_NORMALIZZATO",
-                  "INIZIO_DT","FINE_DT","ATD_SCELTO","TURNO_EUR","EXTRA_MIN","EXTRA_EUR",
+                  "INIZIO_DT","FINE_DT","ATD", "ATD_SCELTO","TURNO_EUR","EXTRA_MIN","EXTRA_EUR",
                   "NOTTE_MIN","NOTTE_EUR","FESTIVO","TOTALE_BLOCCO_EUR","SRC_FILE","SRC_SHEET","SRC_ROW0"]
             w=detail_df[[c for c in cols if c in detail_df.columns]].copy()
             w.to_excel(writer,sheet_name="DettaglioBlocchi",index=False)

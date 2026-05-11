@@ -431,6 +431,7 @@ class BlockAgg:
     assistente: Optional[str] = None
     volo: Optional[str] = None
     destinazione: Optional[str] = None
+    atd_raw_list: List[str] = field(default_factory=list)
     # optional "provided" values from the first row (for discrepancy sheet)
     provided_importo: Optional[float] = None
     provided_extra_min: Optional[int] = None
@@ -954,6 +955,12 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                             # Chiave con INIZIO per distinguere turni diversi stesso giorno
                             _key = (_d, _to, _apt, _as, f"{_sh:02d}:{_sm:02d}")
 
+                    atd_raw_val = ""
+                    if cols.get("atd") and pd.notna(r[cols["atd"]]):
+                        s = str(r[cols["atd"]]).strip()
+                        if s.lower() not in ("nan", "none"):
+                            atd_raw_val = s
+
                             _atdt = []
                             if cols.get("atd"):
                                 for _hh,_mm in extract_atd_candidates(_r[cols["atd"]]):
@@ -1124,6 +1131,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                         assistente=assistente_val if assistente_val else None,
                         volo=volo_val,
                         destinazione=dest_val,
+                            atd_raw_list=[atd_raw_val] if atd_raw_val else [],
                         provided_importo=prov_importo,
                         provided_extra_min=prov_extra_min,
                         provided_night_min=prov_night_min,
@@ -1132,6 +1140,8 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                 else:
                     # merge
                     b = blocks[key]
+                    if atd_raw_val and atd_raw_val not in b.atd_raw_list:
+                        b.atd_raw_list.append(atd_raw_val)
                     b.atd_list.extend(atd_dt_list)
                     b.std_list.extend(std_dt_list)
                     # If any row in block says festivo -> festivo
@@ -1175,7 +1185,8 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                 "FINE_DT": b.end_dt if pd.notna(b.end_dt) else None,
                 "DURATA_TURNO_MIN": 0,
                 "NO_DEC": b.no_dec,
-                "ATD_SCELTO": None,
+                "ATD": ", ".join(filter(None, b.atd_raw_list)),
+            "ATD_SCELTO": None,
                 "TURNO_EUR": 0.0,
                 "EXTRA_MIN_RAW": 0,
                 "EXTRA_MIN": 0,
@@ -1258,6 +1269,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
             "FINE_DT": b.end_dt,
             "DURATA_TURNO_MIN": durata_min,
             "NO_DEC": b.no_dec,
+            "ATD": ", ".join(filter(None, b.atd_raw_list)),
             "ATD_SCELTO": atd_sel,
             "TURNO_EUR": round(turno_eur, 2),
             "EXTRA_MIN_RAW": extra_min_raw,
@@ -1425,6 +1437,7 @@ def create_apt_detail_sheet(df_apt: pd.DataFrame) -> pd.DataFrame:
         'Tour Operator': df_apt['TOUR OPERATOR'].fillna('') if 'TOUR OPERATOR' in df_apt.columns else pd.Series([''] * len(df_apt)),
         'Turno': df_apt['TURNO_NORMALIZZATO'],
         'Volo': df_apt['VOLO'].fillna('') if 'VOLO' in df_apt.columns else pd.Series([''] * len(df_apt)),
+        'ATD': df_apt.get('ATD', pd.Series([''] * len(df_apt))),
         'Dest.ne': df_apt['DEST.NE'].fillna('') if 'DEST.NE' in df_apt.columns else pd.Series([''] * len(df_apt)),
         'Durata': df_apt['DURATA_H:MM'],
         'Turno (€)': df_apt['TURNO_EUR'].round(2),
@@ -1456,6 +1469,7 @@ def create_apt_detail_sheet(df_apt: pd.DataFrame) -> pd.DataFrame:
         'Tour Operator': '',
         'Turno': '',
         'Volo': '',
+        'ATD': df_apt.get('ATD', pd.Series([''] * len(df_apt))),
         'Dest.ne': '',
         'Durata': '',
         'Turno (€)': df_apt['TURNO_EUR'].sum(),
@@ -1892,7 +1906,7 @@ def write_output_excel(output_path: str, detail_df: pd.DataFrame, totals_df: pd.
             cols = [
                 "DATA", "APT", "AGENZIA", "TOUR OPERATOR", "ASSISTENTE", "VOLO", "DEST.NE", "TURNO_FFILL", "TURNO_NORMALIZZATO",
                 "INIZIO_DT", "FINE_DT", "DURATA_TURNO_MIN", "NO_DEC",
-                "ATD_SCELTO",
+                "ATD", "ATD_SCELTO",
                 "TURNO_EUR",
                 "EXTRA_MIN_RAW", "EXTRA_MIN", "EXTRA_H:MM", "EXTRA_EUR",
                 "NOTTE_MIN_RAW", "NOTTE_MIN", "NOTTE_EUR",
