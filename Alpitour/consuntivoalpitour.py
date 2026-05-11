@@ -955,11 +955,11 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                             # Chiave con INIZIO per distinguere turni diversi stesso giorno
                             _key = (_d, _to, _apt, _as, f"{_sh:02d}:{_sm:02d}")
 
-                    atd_raw_val = ""
-                    if cols.get("atd") and pd.notna(r[cols["atd"]]):
-                        s = str(r[cols["atd"]]).strip()
-                        if s.lower() not in ("nan", "none"):
-                            atd_raw_val = s
+                            atd_raw_val = ""
+                            if cols.get("atd") and pd.notna(_r[cols["atd"]]):
+                                _s = str(_r[cols["atd"]]).strip()
+                                if _s.lower() not in ("nan", "none"):
+                                    atd_raw_val = _s
 
                             _atdt = []
                             if cols.get("atd"):
@@ -993,6 +993,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                                     start_dt=_r["__start_dt"], end_dt=_r["__end_dt"],
                                     no_dec=False, atd_list=_atdt.copy(),
                                     std_list=[],
+                                    atd_raw_list=[atd_raw_val] if atd_raw_val else [],
                                     festivo_flag=bool(_r["__festivo"]), first_source=_src,
                                     assistente=_as or None,
                                     volo=_vv or None, destinazione=_dv or None,
@@ -1002,6 +1003,8 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                                 )
                             else:
                                 _b = blocks[_key]
+                                if atd_raw_val and atd_raw_val not in _b.atd_raw_list:
+                                    _b.atd_raw_list.append(atd_raw_val)
                                 _b.atd_list.extend(_atdt)
                                 _b.festivo_flag = _b.festivo_flag or bool(_r["__festivo"])
                                 if _src.original_order < _b.first_source.original_order:
