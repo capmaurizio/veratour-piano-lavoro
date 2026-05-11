@@ -355,7 +355,7 @@ def run_calculation(
 
     return {
         'output_buffer': output_buffer.getvalue(),
-        'output_filename': f"OUT_{uploaded_file_name}",
+        'output_filename': f"PianoLavoro_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
         'detail_df': detail_df,
         'totals_df': totals_df,
         'discr_df': discr_df,
