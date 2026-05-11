@@ -295,6 +295,17 @@ def night_minutes(start_dt: pd.Timestamp, end_dt: pd.Timestamp) -> int:
     return total_minutes
 
 
+
+def _build_errore(errore, nota):
+    """Compone il campo ERRORE unendo errore di calcolo e nota dal file sorgente."""
+    parts = []
+    if errore and str(errore).strip() not in ('', 'nan', 'None'):
+        parts.append(str(errore).strip())
+    if nota and str(nota).strip() not in ('', 'nan', 'None'):
+        parts.append(f"⚠️ NOTA: {str(nota).strip()}")
+    return " | ".join(parts)
+
+
 def compute_turno_eur(apt: str) -> float:
     """Calcola importo turno base (sempre 2h30 = 150 min) - BGY €110, FCO €115, VCE €140, altri €100"""
     apt_upper = apt.upper().strip()
@@ -387,6 +398,7 @@ def detect_columns(df: pd.DataFrame) -> Dict[str, Optional[str]]:
         "festivo": find_col(df, [r"^FESTIVO$", r"\bHOLIDAY\b"]),
         "assistente": find_col(df, [r"^ASSISTENTE$", r"\bASSISTENTE\b"]),
         "volo": find_col(df, [r"^VOLO$", r"NUMERO\s*VOLO", r"N\.?\s*VOLO", r"FLIGHT"]),
+        "note": find_col(df, [r"^NOTE$", r"^NOTA$", r"\bNOTE\b", r"\bNOTA\b"]),
         "destinazione": find_col(df, [r"^DEST\.?NE$", r"^DEST$", r"DESTINAZIONE", r"DESTINATION"]),
     }
 
@@ -423,6 +435,7 @@ class BlockAgg:
     destinazione: Optional[str] = None
     atd_raw_list: List[str] = field(default_factory=list)  # Destinazione
     errore: Optional[str] = None  # Messaggio di errore se i dati non sono validi
+    nota: Optional[str] = None    # Testo dalla colonna NOTE del file sorgente
 
 
 def iter_excel_sheets(file_path: str) -> Iterable[Tuple[str, pd.DataFrame]]:
@@ -887,7 +900,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
             "CARTE_EUR": round(carte_eur, 2),
             "FESTIVO": is_festivo if 'is_festivo' in locals() else False,
             "TOTALE_BLOCCO_EUR": round(totale, 2),
-            "ERRORE": str(errore_msg) if errore_msg else (str(b.errore) if b.errore else ""),
+            "ERRORE": _build_errore(errore_msg or b.errore, b.nota),
             "SRC_FILE": b.first_source.file,
             "SRC_SHEET": b.first_source.sheet,
             "SRC_ROW0": b.first_source.row_index + 2,  # Excel è 1-based

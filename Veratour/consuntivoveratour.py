@@ -434,6 +434,7 @@ def detect_columns(df: pd.DataFrame) -> Dict[str, Optional[str]]:
         "festivo":       find_col(df, [r"^festivo$", r"\bholiday\b"]),
         "assistente":    find_col(df, [r"^assistente$", r"\bassistente\b"]),
         "volo":          find_col(df, [r"^volo$", r"numero\s*volo", r"n\.?\s*volo", r"flight"]),
+        "note": find_col(df, [r"^NOTE$", r"^NOTA$", r"\bNOTE\b", r"\bNOTA\b"]),
         "destinazione":  find_col(df, [r"^DEST\.?NE$", r"^DEST$", r"DESTINAZIONE", r"DESTINATION"]),
     }
 
@@ -471,6 +472,7 @@ class BlockAgg:
     provided_importo: Optional[float] = None
     provided_extra_min: Optional[int] = None
     provided_night_min: Optional[int] = None
+    nota: Optional[str] = None    # Testo dalla colonna NOTE del file sorgente
 
 
 def extract_atd_candidates(val) -> List[Tuple[int, int]]:
@@ -498,6 +500,17 @@ def extract_atd_candidates(val) -> List[Tuple[int, int]]:
         if 0 <= h <= 47 and 0 <= m <= 59:
             out.append((h % 24, m))
     return out
+
+
+
+def _build_errore(errore, nota):
+    """Compone il campo ERRORE unendo errore di calcolo e nota dal file sorgente."""
+    parts = []
+    if errore and str(errore).strip() not in ('', 'nan', 'None'):
+        parts.append(str(errore).strip())
+    if nota and str(nota).strip() not in ('', 'nan', 'None'):
+        parts.append(f"⚠️ NOTA: {str(nota).strip()}")
+    return " | ".join(parts)
 
 
 def compute_turno_eur(durata_min: int, cfg: CalcConfig) -> float:
@@ -866,6 +879,13 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                         dest_val = _safe_str(r[dest_col]) if dest_col and dest_col in r.index else None
                         dest_val = dest_val or None
 
+                        note_col = cols.get("note")
+                        nota_val = None
+                        if note_col and note_col in r.index and pd.notna(r[note_col]):
+                            nv = str(r[note_col]).strip()
+                            if nv and nv.lower() not in ('nan', 'none', ''):
+                                nota_val = nv
+
                         blocks[key] = BlockAgg(
                             date=d, apt=apt,
                             turno_raw_ffill=turno_norm,
@@ -883,6 +903,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                             provided_importo=prov_importo,
                             provided_extra_min=prov_extra_min,
                             provided_night_min=prov_night_min,
+                            nota=nota_val,
                         )
                     else:
                         b = blocks[key]
@@ -1105,6 +1126,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
             "NOTTE_EUR": round(night_eur, 2),
             "FESTIVO": b.festivo_flag,
             "TOTALE_BLOCCO_EUR": round(totale, 2),
+            "ERRORE": _build_errore(None, b.nota),
             "SRC_FILE": b.first_source.file,
             "SRC_SHEET": b.first_source.sheet,
             "SRC_ROW0": b.first_source.row_index,

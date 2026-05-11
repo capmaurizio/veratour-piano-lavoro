@@ -299,6 +299,17 @@ def night_minutes(start_dt: pd.Timestamp, end_dt: pd.Timestamp) -> int:
     return total_minutes
 
 
+
+def _build_errore(errore, nota):
+    """Compone il campo ERRORE unendo errore di calcolo e nota dal file sorgente."""
+    parts = []
+    if errore and str(errore).strip() not in ('', 'nan', 'None'):
+        parts.append(str(errore).strip())
+    if nota and str(nota).strip() not in ('', 'nan', 'None'):
+        parts.append(f"⚠️ NOTA: {str(nota).strip()}")
+    return " | ".join(parts)
+
+
 def compute_turno_eur(servizio_tipo: str, arrivi_trf: Optional[str], cfg: CalcConfig) -> float:
     """
     Calcola importo turno base secondo tipo servizio
@@ -428,6 +439,7 @@ def detect_columns(df: pd.DataFrame) -> Dict[str, Optional[str]]:
         "festivo": find_col(df, [r"^FESTIVO$", r"\bHOLIDAY\b"]),
         "assistente": find_col(df, [r"^ASSISTENTE$", r"\bASSISTENTE\b"]),
         "volo": find_col(df, [r"^VOLO$", r"NUMERO\s*VOLO", r"N\.?\s*VOLO", r"FLIGHT"]),
+        "note": find_col(df, [r"^NOTE$", r"^NOTA$", r"\bNOTE\b", r"\bNOTA\b"]),
         "destinazione": find_col(df, [r"^DEST\.?NE$", r"^DEST$", r"DESTINAZIONE", r"DESTINATION"]),
     }
 
@@ -467,6 +479,7 @@ class BlockAgg:
     destinazione: Optional[str] = None
     atd_raw_list: List[str] = field(default_factory=list)
     errore: Optional[str] = None  # Messaggio di errore se i dati non sono validi
+    nota: Optional[str] = None    # Testo dalla colonna NOTE del file sorgente
 
 
 def iter_excel_sheets(file_path: str) -> Iterable[Tuple[str, pd.DataFrame]]:
@@ -900,7 +913,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                 "NOTTE_EUR": 0.0,
                 "FESTIVO": b.festivo_flag,
                 "TOTALE_BLOCCO_EUR": 0.0,
-                "ERRORE": b.errore,
+                "ERRORE": _build_errore(b.errore, b.nota),
                 "SRC_FILE": b.first_source.file if b.first_source else "",
                 "SRC_SHEET": b.first_source.sheet if b.first_source else "",
                 "SRC_ROW0": b.first_source.row_index + 2 if b.first_source else 0,
@@ -979,7 +992,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
             "NOTTE_EUR": round(night_eur, 2),
             "FESTIVO": b.festivo_flag,
             "TOTALE_BLOCCO_EUR": totale,
-            "ERRORE": "",
+            "ERRORE": _build_errore(None, b.nota),
             "SRC_FILE": b.first_source.file if b.first_source else "",
             "SRC_SHEET": b.first_source.sheet if b.first_source else "",
             "SRC_ROW0": b.first_source.row_index + 2 if b.first_source else 0,

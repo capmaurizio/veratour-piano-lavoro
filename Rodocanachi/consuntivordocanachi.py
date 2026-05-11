@@ -132,6 +132,7 @@ def detect_columns(df):
         "data":      find_col(df,[r"^DATA$",r"\bDATE\b"]),
         "tour_operator": find_col(df,[r"TOUR\s*OPERATOR",r"^TO$",r"\bOPERATORE\b"]),
         "volo":      find_col(df,[r"^VOLO$",r"NUMERO\s*VOLO",r"FLIGHT"]),
+        "note": find_col(df, [r"^NOTE$", r"^NOTA$", r"\bNOTE\b", r"\bNOTA\b"]),
         "destinazione": find_col(df,[r"^DEST\.?NE$",r"DESTINAZIONE"]),
         "apt":       find_col(df,[r"^APT$",r"\bAEROPORTO\b"]),
         "turno":     find_col(df,[r"^TURNO$",r"^TURNO\s*ASSISTENTE$"]),
@@ -179,6 +180,7 @@ class BlockAgg:
     assistente:Optional[str]=None
     volo:Optional[str]=None
     destinazione:Optional[str]=None
+    nota:Optional[str]=None
 
 def iter_sheets(fp):
     xls=pd.ExcelFile(fp)
@@ -192,6 +194,17 @@ def _ss(v):
     except: pass
     s=str(v).strip()
     return "" if s.lower() in ("nan","none") else s
+
+
+def _build_errore(errore, nota):
+    """Compone il campo ERRORE unendo errore di calcolo e nota dal file sorgente."""
+    parts = []
+    if errore and str(errore).strip() not in ('', 'nan', 'None'):
+        parts.append(str(errore).strip())
+    if nota and str(nota).strip() not in ('', 'nan', 'None'):
+        parts.append(f"⚠️ NOTA: {str(nota).strip()}")
+    return " | ".join(parts)
+
 
 def process_files(input_files:List[str], cfg:CalcConfig):
     blocks:Dict={}; global_order=0
@@ -302,7 +315,7 @@ def process_files(input_files:List[str], cfg:CalcConfig):
                             _stdt.append(_tdt)
 
                     _src=SourceRowRef(fp,sheet,int(_r["__sheet_row_order"]),int(_r["__global_order"]))
-                    _vc=cols.get("volo"); _dc=cols.get("destinazione")
+                    _vc=cols.get("volo"); _dc=cols.get("destinazione"); _nc=cols.get("note")
                     if _key not in blocks:
                         blocks[_key]=BlockAgg(
                             date=_d,apt=_apt,turno_raw_ffill=_tn,turno_norm=_tn,
@@ -405,6 +418,7 @@ def process_files(input_files:List[str], cfg:CalcConfig):
             "TURNO_EUR":round(turno_eur,2),"EXTRA_MIN":extra_min,"EXTRA_EUR":extra_eur,
             "NOTTE_MIN":notte_min,"NOTTE_EUR":notte_eur,
             "FESTIVO":is_fes,"TOTALE_BLOCCO_EUR":totale,
+            "ERRORE":_build_errore(None,b.nota),
             "SRC_FILE":b.first_source.file,"SRC_SHEET":b.first_source.sheet,
             "SRC_ROW0":b.first_source.row_index+2,
         })
