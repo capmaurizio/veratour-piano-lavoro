@@ -30,7 +30,7 @@ except ImportError:
     _extract_atd_candidates = None
 
 # Moduli che supportano il nuovo formato 2026 nativamente
-_NEW_FORMAT_MODULES = {'veratour', 'alpitour'}
+_NEW_FORMAT_MODULES = {'veratour', 'alpitour', 'iot', 'flyness', 'rodocanachi'}
 
 
 def _make_compat_excel(input_path: str) -> Optional[str]:
