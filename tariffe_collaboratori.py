@@ -1670,7 +1670,31 @@ def create_collaboratori_sheet(
             minuti_notturni = float(row.get('NOTTE_MIN', 0)) if pd.notna(row.get('NOTTE_MIN')) else 0.0
         except (ValueError, TypeError):
             minuti_notturni = 0.0
-        
+
+        # ── RICALCOLO NOTTURNO con fascia corretta per il collaboratore ──────────
+        # Il NOTTE_MIN del modulo TO usa la fascia del tour operator (es. Aliservice
+        # BGY=23:00-03:30), che può differire dalla fascia contrattuale del collaboratore
+        # (BGY=23:00-05:00). Ricalcoliamo autonomamente usando INIZIO_DT/FINE_DT.
+        inizio_dt_for_notte = row.get('INIZIO_DT') if 'INIZIO_DT' in row.index else None
+        fine_dt_for_notte   = row.get('FINE_DT')   if 'FINE_DT'   in row.index else None
+        if pd.notna(inizio_dt_for_notte) and pd.notna(fine_dt_for_notte):
+            apt_upper_notte = apt.upper().strip() if apt else ''
+            # Fascia notturna per aeroporto (contratto collaboratori 2026):
+            # BGY: 23:00-05:00 | FCO/NAP/altri: 23:00-06:00 | SAND: 23:00-04:00
+            if apt_upper_notte == 'BGY':
+                fascia_end_h = 5
+            elif apt_upper_notte in ('FCO', 'NAP', 'VRN', 'MXP'):
+                fascia_end_h = 6
+            else:
+                fascia_end_h = 6
+            minuti_notturni = float(calcola_minuti_notturni_periodo(
+                pd.Timestamp(inizio_dt_for_notte),
+                pd.Timestamp(fine_dt_for_notte),
+                fascia_start_h=23,
+                fascia_end_h=fascia_end_h
+            ))
+        # ────────────────────────────────────────────────────────────────────────
+
         data_str = row.get('DATA', '')
         is_fest = is_festivo(data_str) if data_str else False
         
