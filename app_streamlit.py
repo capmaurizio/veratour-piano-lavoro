@@ -18,6 +18,7 @@ from ui_styles import (
 from tour_operators import detect_tour_operators, find_tour_operator_folder
 from processing import run_calculation
 from ui_regolamento import render_regolamento_page
+from validation_llm import render_validazione_llm
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Page config
@@ -301,6 +302,11 @@ if has_results:
 
     st.markdown("")
 
+    # ── Analisi AI del file ───────────────────────────────────────────────
+    render_validazione_llm(tmp_path, key_prefix="results")
+
+    st.markdown("")
+
     # ── Segnalazioni TO — sempre visibili ────────────────────────────────
     if aliservice_available:
         render_status_line("✓", "Aliservice: modulo presente e attivo", "success")
@@ -361,6 +367,11 @@ else:
                     "Puoi comunque tentare l'elaborazione ma il risultato potrebbe essere vuoto."
                 )
     # ───────────────────────────────────────────────────────────────────────
+
+    # ── Analisi AI del file ───────────────────────────────────────────────
+    render_validazione_llm(tmp_path, key_prefix="pre_elab")
+
+    st.markdown("")
 
     if all_tour_operators:
         render_status_line("●", f"Rilevati: {', '.join(sorted(all_tour_operators))}", "info")
