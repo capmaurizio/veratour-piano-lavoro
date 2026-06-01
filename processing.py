@@ -283,11 +283,14 @@ def run_calculation(
             all_discr_dfs.append(discr)
             processed_count += 1
         except Exception as e:
-            errors.append(f"{to_info['name']}: {str(e)}")
+            import traceback as _tb
+            errors.append({
+                'to': to_info['name'],
+                'msg': str(e),
+                'traceback': _tb.format_exc(),
+            })
 
-    # Mostra errori
-    for error in errors:
-        st.error(f"Errore durante l'elaborazione: {error}")
+    # Gli errori vengono restituiti al chiamante (app_streamlit.py li salva nel session_state)
 
     if processed_count == 0:
         st.error("Nessun tour operatour con calcolo disponibile trovato nel file.")

@@ -262,19 +262,29 @@ for to_name in sorted(all_tour_operators):
 # Show results if available, else show detection + calculate
 # ═══════════════════════════════════════════════════════════════════════════════
 if has_results:
-    # ═════════════════════════════════════════════════════════════════════════
-    # STEP 3: Completed — show stepper + results
-    # ═════════════════════════════════════════════════════════════════════════
-    render_stepper(4)  # all done
+    render_stepper(4)
 
     detail_df = st.session_state.get('detail_df')
     discr_df = st.session_state.get('discr_df')
     processed_count = st.session_state.get('processed_count', 0)
 
-    # Stat cards
+    # ── ERRORI CRITICI — sempre visibili in cima ──────────────────────────
+    if st.session_state.get('last_error'):
+        st.error(f"⚠️ **ERRORE ELABORAZIONE**\n\n{st.session_state['last_error']}")
+        if st.session_state.get('last_traceback'):
+            with st.expander("📋 Dettaglio tecnico errore (traceback)", expanded=False):
+                st.code(st.session_state['last_traceback'], language="python")
+        col_close, _ = st.columns([1, 3])
+        with col_close:
+            if st.button("✕ Chiudi errore", type="secondary", key="close_err_top"):
+                st.session_state.pop('last_error', None)
+                st.session_state.pop('last_traceback', None)
+                st.rerun()
+
+    # ── Stat cards ───────────────────────────────────────────────────────
     col1, col2, col3 = st.columns(3)
     with col1:
-        render_stat_card(processed_count, "Tour Operator")
+        render_stat_card(processed_count, "Tour Operator elaborati")
     with col2:
         render_stat_card(
             len(detail_df) if detail_df is not None else 0,
@@ -291,24 +301,27 @@ if has_results:
 
     st.markdown("")
 
-    # Detected TOs summary
+    # ── Segnalazioni TO — sempre visibili ────────────────────────────────
+    if aliservice_available:
+        render_status_line("✓", "Aliservice: modulo presente e attivo", "success")
     if all_tour_operators:
-        render_status_line("●", f"Rilevati: {', '.join(sorted(all_tour_operators))}", "info")
+        render_status_line("●", f"Rilevati nel file: {', '.join(sorted(all_tour_operators))}", "info")
     if available_folders:
-        render_status_line("✓", f"Elaborati: {', '.join(sorted(available_folders.keys()))}", "success")
+        render_status_line("✓", f"Elaborati con calcolo: {', '.join(sorted(available_folders.keys()))}", "success")
     if missing:
-        render_status_line("–", f"Non codificati: {', '.join(sorted(missing))}", "warn")
+        for m in sorted(missing):
+            st.warning(f"⚠️ **{m}** — rilevato nel file ma senza modulo di calcolo. Non è stato elaborato.")
 
-    # Discrepanze
+    # ── Discrepanze — sempre visibili se presenti ────────────────────────
     if discr_df is not None and not discr_df.empty:
-        with st.expander(f"Discrepanze rilevate ({discr_count})", expanded=False):
-            st.dataframe(discr_df, use_container_width=True)
+        st.markdown(f"### ⚠️ Discrepanze rilevate ({discr_count})")
+        st.dataframe(discr_df, use_container_width=True, hide_index=True)
 
     st.markdown("")
 
-    # Download
+    # ── Download ─────────────────────────────────────────────────────────
     st.download_button(
-        label="Scarica file Excel completo",
+        label="⬇️  Scarica file Excel completo",
         data=st.session_state['output_file'],
         file_name=st.session_state.get('output_filename', 'output.xlsx'),
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -318,7 +331,7 @@ if has_results:
 
     render_status_line(
         "i",
-        "Fogli per aeroporto, TOTALE, DettaglioBlocchi, TotaliPeriodo, Discrepanze, TourOperatourRilevati.",
+        "Il file contiene: fogli per aeroporto, TOTALE, DettaglioBlocchi, TotaliPeriodo, Discrepanze, TourOperatourRilevati.",
         "info",
     )
 
@@ -367,7 +380,21 @@ else:
     round_night_step = 5
     holiday_file = None
 
+    # Mostra errori persistenti da elaborazione precedente
+    if st.session_state.get('last_error'):
+        with st.expander("🔴 Errore ultima elaborazione — clicca per dettagli", expanded=True):
+            st.error(st.session_state['last_error'])
+            if st.session_state.get('last_traceback'):
+                st.code(st.session_state['last_traceback'], language="python")
+            if st.button("Chiudi errore", type="secondary"):
+                st.session_state.pop('last_error', None)
+                st.session_state.pop('last_traceback', None)
+                st.rerun()
+
     if st.button("Esegui elaborazione", type="primary", use_container_width=True):
+        # Pulisce errori precedenti
+        st.session_state.pop('last_error', None)
+        st.session_state.pop('last_traceback', None)
         with st.spinner("Elaborazione in corso..."):
             try:
                 result = run_calculation(
@@ -388,10 +415,28 @@ else:
                     st.session_state['totals_df'] = result['totals_df']
                     st.session_state['discr_df'] = result['discr_df']
                     st.session_state['processed_count'] = result['processed_count']
+                    # Salva errori per-TO se presenti
+                    errs = result.get('errors', [])
+                    if errs:
+                        parts = []
+                        tbs = []
+                        for e in errs:
+                            if isinstance(e, dict):
+                                parts.append(f"{e.get('to','?')}: {e.get('msg','?')}")
+                                tbs.append(f"=== {e.get('to','?')} ===\n{e.get('traceback','')}")
+                            else:
+                                parts.append(str(e))
+                        st.session_state['last_error'] = "Errori in alcuni Tour Operator:\n" + "\n".join(parts)
+                        st.session_state['last_traceback'] = "\n\n".join(tbs)
+                    st.rerun()
+                else:
+                    st.session_state['last_error'] = "L'elaborazione non ha prodotto risultati. Nessun Tour Operator riconosciuto nel file."
                     st.rerun()
             except Exception as e:
-                st.error(f"Errore: {str(e)}")
-                st.exception(e)
+                import traceback
+                st.session_state['last_error'] = f"Errore durante l'elaborazione: {str(e)}"
+                st.session_state['last_traceback'] = traceback.format_exc()
+                st.rerun()
 
 # ═══════════════════════════════════════════════════════════════════════════════
 render_footer()

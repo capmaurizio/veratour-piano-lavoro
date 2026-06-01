@@ -791,9 +791,13 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                     key = (d, apt, turno_norm)
 
                 # Extract ATD candidates from row
+                atd_raw_val = ""
                 atd_times: List[Tuple[int, int]] = []
                 if cols["atd"]:
                     atd_val = r[cols["atd"]]
+                    atd_raw_str = str(atd_val).strip() if pd.notna(atd_val) else ""
+                    if atd_raw_str and atd_raw_str.lower() not in ("nan", "none"):
+                        atd_raw_val = atd_raw_str
                     parsed = parse_time_value(atd_val)
                     if parsed:
                         atd_times.append(parsed)
