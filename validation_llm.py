@@ -38,6 +38,16 @@ def _get_api_key() -> Optional[str]:
     return os.environ.get("ANTHROPIC_API_KEY")
 
 
+def _file_hash(file_path: str) -> str:
+    """Calcola MD5 del file per usarlo come cache key stabile."""
+    import hashlib
+    try:
+        with open(file_path, "rb") as f:
+            return hashlib.md5(f.read()).hexdigest()[:16]
+    except Exception:
+        return os.path.basename(file_path)
+
+
 def _load_business_rules() -> str:
     """Carica le regole di business dal file business_rules.md."""
     base = os.path.dirname(os.path.abspath(__file__))
@@ -464,15 +474,19 @@ def valida_file_con_llm(file_path: str) -> Optional[dict]:
 def render_validazione_llm(file_path: str, key_prefix: str = ""):
     """
     Componente Streamlit: mostra il pannello di validazione LLM.
-    key_prefix: per evitare conflitti di chiave tra chiamate multiple.
+    Usa l'hash del contenuto del file come cache key — l'analisi viene
+    fatta UNA SOLA VOLTA finché il file non cambia, anche se Streamlit
+    fa molti rerun.
     """
     api_key = _get_api_key()
     if not api_key:
         return  # Nessuna chiave, nessun pannello
 
-    cache_key = f"_llm_validation_{file_path}_{key_prefix}"
+    # Cache key basata sull'hash del file (stabile tra rerun)
+    fhash = _file_hash(file_path)
+    cache_key = f"_llm_validation_{fhash}_{key_prefix}"
 
-    # Usa cache nel session_state per non richiamare ogni render
+    # Esegue l'analisi solo se non già in cache per questo file
     if cache_key not in st.session_state:
         with st.spinner("🤖 Analisi intelligente del file in corso..."):
             result = valida_file_con_llm(file_path)
