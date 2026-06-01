@@ -1347,7 +1347,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                 "ATD": ", ".join(filter(None, b.atd_raw_list)) if _primo else "",
                 "ATD_SCELTO": atd_sel if _primo else None,
                 "ATD_SCELTO_HH:MM": (
-                    atd_sel.strftime("%H:%M") if _primo and atd_sel is not None
+                    (atd_sel + pd.Timedelta(minutes=30)).strftime("%H:%M") if _primo and atd_sel is not None
                     else ""
                 ),
                 "TURNO_EUR": round(turno_eur, 2) if _primo else 0.0,
