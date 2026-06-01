@@ -224,3 +224,54 @@ TO tipicamente senza modulo:
 | Righe singole con INIZIO/FINE TURNO vuoti | ✅ NON segnalare |
 | AGENZIA vuota per righe non-Aliservice | ✅ NON segnalare |
 | TO Aliservice (BRIXIA, FUTURA ecc.) in TOUR OPERATOR | ✅ NON segnalare |
+
+---
+
+## 13. TURNI MULTI-VOLO — ESPANSIONE IN RIGHE SEPARATE
+
+Quando un singolo turno (stessa DATA + APT + INIZIO/FINE TURNO) copre **più voli** (es. un assistente gestisce 2 voli nella stessa tranche oraria), il sistema produce **una riga per ogni volo** nel foglio DettaglioBlocchi:
+
+- **Riga 1 (primo volo):** porta tutti i valori economici reali (TURNO_EUR, EXTRA_EUR, NOTTE_EUR, TOTALE_BLOCCO_EUR)
+- **Riga 2..N (voli aggiuntivi):** stessi dati del blocco (DATA, APT, ASSISTENTE, TURNO_NORMALIZZATO), ma VOLO e DEST.NE diversi, valori economici = **€0**
+
+**Il calcolo è CORRETTO:** un solo pagamento per turno, indipendentemente da quanti voli copre.  
+**NON segnalare** righe con €0 nelle righe voli aggiuntivi come errore: è il comportamento atteso.
+
+Esempio (turno SC1 di Filippo Bonfanti, BGY, 30/05):
+```
+DATA    | APT | ASSISTENTE | TURNO_NORM  | VOLO   | TURNO_EUR | EXTRA_EUR | TOTALE
+30/05   | BGY | Bonfanti F | 07:00-11:00 | W66001 | €75.00    | €13.50    | €88.50
+30/05   | BGY | Bonfanti F | 07:00-11:00 | W66002 |  €0.00    |  €0.00    |  €0.00  ← riga volo aggiuntivo
+```
+
+---
+
+## 14. COLONNA ATD_SCELTO_HH:MM (Alpitour)
+
+Nel foglio DettaglioBlocchi di Alpitour è presente la colonna **ATD_SCELTO_HH:MM** che mostra in formato HH:MM l'orario usato per calcolare l'extra (ritardo):
+
+- Se **ATD è presente**: contiene l'ATD scelto (preferibilmente l'ATD più tardi dopo la fine turno)
+- Se **ATD non disponibile**: contiene l'STD usato come fallback
+- **Righe voli aggiuntivi** (turno multi-volo): colonna vuota
+
+Questa colonna è SOLO informativa per permettere la verifica visiva del calcolo. La logica di selezione ATD di Alpitour è:
+1. Preferisci ATD dopo la fine turno → prende il MAX
+2. Se nessun ATD dopo fine turno → prende l'ultimo ATD disponibile
+3. Se nessun ATD → usa STD (prefer STD dopo fine turno, altrimenti l'ultimo STD)
+
+---
+
+## 15. COLONNE OUTPUT EXCEL — DettaglioBlocchi
+
+Ordine colonne nel foglio `DettaglioBlocchi`:
+```
+DATA, APT, AGENZIA, TOUR OPERATOR, ASSISTENTE, VOLO, DEST.NE,
+TURNO_FFILL, TURNO_NORMALIZZATO, INIZIO_DT, FINE_DT, DURATA_TURNO_MIN, NO_DEC,
+ATD, ATD_SCELTO, ATD_SCELTO_HH:MM,
+TURNO_EUR,
+EXTRA_MIN_RAW, EXTRA_MIN, EXTRA_H:MM, EXTRA_EUR,
+NOTTE_MIN_RAW, NOTTE_MIN, NOTTE_EUR,
+FESTIVO, TOTALE_BLOCCO_EUR, ERRORE,
+SRC_FILE, SRC_SHEET, SRC_ROW0
+```
+
