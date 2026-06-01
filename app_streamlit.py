@@ -18,7 +18,7 @@ from ui_styles import (
 from tour_operators import detect_tour_operators, find_tour_operator_folder
 from processing import run_calculation
 from ui_regolamento import render_regolamento_page
-from validation_llm import render_validazione_llm
+from validation_llm import render_validazione_llm, render_verifica_calcoli_llm
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Page config
@@ -340,6 +340,10 @@ if has_results:
         "Il file contiene: fogli per aeroporto, TOTALE, DettaglioBlocchi, TotaliPeriodo, Discrepanze, TourOperatourRilevati.",
         "info",
     )
+
+    # ── Verifica calcoli con AI ───────────────────────────────────────────
+    if detail_df is not None:
+        render_verifica_calcoli_llm(detail_df)
 
 else:
     # ═════════════════════════════════════════════════════════════════════════
