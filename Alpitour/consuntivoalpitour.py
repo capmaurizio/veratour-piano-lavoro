@@ -1228,36 +1228,42 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
     for key, b in sorted(blocks.items(), key=lambda kv: kv[1].first_source.original_order if kv[1].first_source else 0):
         # Se c'è un errore, metti tutti i valori a zero
         if b.errore:
-            rows_detail.append({
-                "DATA": b.date.strftime("%d/%m/%Y"),
-                "APT": b.apt,
-                "TOUR OPERATOR": cfg.to_keyword.capitalize(),
-                "ASSISTENTE": b.assistente if b.assistente else "",
-                "VOLO": " / ".join(b.volo_list) if b.volo_list else (b.volo or ""),
-                "DEST.NE": " / ".join(b.dest_list) if b.dest_list else (b.destinazione or ""),
-                "TURNO_FFILL": b.turno_raw_ffill,
-                "TURNO_NORMALIZZATO": b.turno_norm,
-                "INIZIO_DT": b.start_dt if pd.notna(b.start_dt) else None,
-                "FINE_DT": b.end_dt if pd.notna(b.end_dt) else None,
-                "DURATA_TURNO_MIN": 0,
-                "NO_DEC": b.no_dec,
-                "ATD": ", ".join(filter(None, b.atd_raw_list)),
-            "ATD_SCELTO": None,
-                "TURNO_EUR": 0.0,
-                "EXTRA_MIN_RAW": 0,
-                "EXTRA_MIN": 0,
-                "EXTRA_H:MM": "0:00",
-                "EXTRA_EUR": 0.0,
-                "NOTTE_MIN_RAW": 0,
-                "NOTTE_MIN": 0,
-                "NOTTE_EUR": 0.0,
-                "FESTIVO": b.festivo_flag,
-                "TOTALE_BLOCCO_EUR": 0.0,
-                "ERRORE": _build_errore(b.errore, b.nota),
-                "SRC_FILE": b.first_source.file,
-                "SRC_SHEET": b.first_source.sheet,
-                "SRC_ROW0": b.first_source.row_index,
-            })
+            # Blocco con errore: una riga per ogni volo (solo primo ha errore, altri vuoti)
+            voli_err = b.volo_list if b.volo_list else ([b.volo] if b.volo else [""])
+            dests_err = b.dest_list if b.dest_list else ([b.destinazione] if b.destinazione else [""])
+            while len(dests_err) < len(voli_err): dests_err.append("")
+            while len(voli_err) < len(dests_err): voli_err.append("")
+            for _vi, (_volo_e, _dest_e) in enumerate(zip(voli_err, dests_err)):
+                rows_detail.append({
+                    "DATA": b.date.strftime("%d/%m/%Y"),
+                    "APT": b.apt,
+                    "TOUR OPERATOR": cfg.to_keyword.capitalize(),
+                    "ASSISTENTE": b.assistente if b.assistente else "",
+                    "VOLO": _volo_e or "",
+                    "DEST.NE": _dest_e or "",
+                    "TURNO_FFILL": b.turno_raw_ffill,
+                    "TURNO_NORMALIZZATO": b.turno_norm,
+                    "INIZIO_DT": b.start_dt if pd.notna(b.start_dt) else None,
+                    "FINE_DT": b.end_dt if pd.notna(b.end_dt) else None,
+                    "DURATA_TURNO_MIN": 0,
+                    "NO_DEC": b.no_dec,
+                    "ATD": ", ".join(filter(None, b.atd_raw_list)) if _vi == 0 else "",
+                    "ATD_SCELTO": None,
+                    "TURNO_EUR": 0.0,
+                    "EXTRA_MIN_RAW": 0,
+                    "EXTRA_MIN": 0,
+                    "EXTRA_H:MM": "0:00",
+                    "EXTRA_EUR": 0.0,
+                    "NOTTE_MIN_RAW": 0,
+                    "NOTTE_MIN": 0,
+                    "NOTTE_EUR": 0.0,
+                    "FESTIVO": b.festivo_flag,
+                    "TOTALE_BLOCCO_EUR": 0.0,
+                    "ERRORE": _build_errore(b.errore, b.nota) if _vi == 0 else "",
+                    "SRC_FILE": b.first_source.file,
+                    "SRC_SHEET": b.first_source.sheet,
+                    "SRC_ROW0": b.first_source.row_index,
+                })
             continue
         
         durata_min = int((b.end_dt - b.start_dt).total_seconds() // 60)
@@ -1312,36 +1318,48 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
         def hmm(m: int) -> str:
             return f"{m // 60}:{m % 60:02d}"
 
-        rows_detail.append({
-            "DATA": b.date.strftime("%d/%m/%Y"),
-            "APT": b.apt,
-            "TOUR OPERATOR": cfg.to_keyword.capitalize(),
-            "ASSISTENTE": b.assistente if b.assistente else "",
-            "VOLO": " / ".join(b.volo_list) if b.volo_list else (b.volo or ""),
-            "DEST.NE": " / ".join(b.dest_list) if b.dest_list else (b.destinazione or ""),
-            "TURNO_FFILL": b.turno_raw_ffill,
-            "TURNO_NORMALIZZATO": b.turno_norm,
-            "INIZIO_DT": b.start_dt,
-            "FINE_DT": b.end_dt,
-            "DURATA_TURNO_MIN": durata_min,
-            "NO_DEC": b.no_dec,
-            "ATD": ", ".join(filter(None, b.atd_raw_list)),
-            "ATD_SCELTO": atd_sel,
-            "TURNO_EUR": round(turno_eur, 2),
-            "EXTRA_MIN_RAW": extra_min_raw,
-            "EXTRA_MIN": int(extra_min),
-            "EXTRA_H:MM": hmm(int(extra_min)),
-            "EXTRA_EUR": round(extra_eur, 2),
-            "NOTTE_MIN_RAW": int(night_min_raw),
-            "NOTTE_MIN": int(night_min),
-            "NOTTE_EUR": round(night_eur, 2),
-            "FESTIVO": b.festivo_flag,
-            "TOTALE_BLOCCO_EUR": round(totale, 2),
-            "ERRORE": _build_errore(None, b.nota),
-            "SRC_FILE": b.first_source.file,
-            "SRC_SHEET": b.first_source.sheet,
-            "SRC_ROW0": b.first_source.row_index,
-        })
+        # ── Una riga per ogni volo del blocco ────────────────────────────────
+        # Il primo volo porta tutti i valori economici.
+        # I voli aggiuntivi (stesso turno) replicano i dati del blocco
+        # ma con valori economici a zero per non duplicare i totali.
+        voli_out = b.volo_list if b.volo_list else ([b.volo] if b.volo else [""])
+        dests_out = b.dest_list if b.dest_list else ([b.destinazione] if b.destinazione else [""])
+        # Pareggia le due liste
+        while len(dests_out) < len(voli_out): dests_out.append("")
+        while len(voli_out) < len(dests_out): voli_out.append("")
+
+        for _vi, (_volo_o, _dest_o) in enumerate(zip(voli_out, dests_out)):
+            _primo = (_vi == 0)  # solo il primo volo porta i valori economici
+            rows_detail.append({
+                "DATA": b.date.strftime("%d/%m/%Y"),
+                "APT": b.apt,
+                "TOUR OPERATOR": cfg.to_keyword.capitalize(),
+                "ASSISTENTE": b.assistente if b.assistente else "",
+                "VOLO": _volo_o or "",
+                "DEST.NE": _dest_o or "",
+                "TURNO_FFILL": b.turno_raw_ffill,
+                "TURNO_NORMALIZZATO": b.turno_norm,
+                "INIZIO_DT": b.start_dt,
+                "FINE_DT": b.end_dt,
+                "DURATA_TURNO_MIN": durata_min if _primo else 0,
+                "NO_DEC": b.no_dec,
+                "ATD": ", ".join(filter(None, b.atd_raw_list)) if _primo else "",
+                "ATD_SCELTO": atd_sel if _primo else None,
+                "TURNO_EUR": round(turno_eur, 2) if _primo else 0.0,
+                "EXTRA_MIN_RAW": extra_min_raw if _primo else 0,
+                "EXTRA_MIN": int(extra_min) if _primo else 0,
+                "EXTRA_H:MM": hmm(int(extra_min)) if _primo else "0:00",
+                "EXTRA_EUR": round(extra_eur, 2) if _primo else 0.0,
+                "NOTTE_MIN_RAW": int(night_min_raw) if _primo else 0,
+                "NOTTE_MIN": int(night_min) if _primo else 0,
+                "NOTTE_EUR": round(night_eur, 2) if _primo else 0.0,
+                "FESTIVO": b.festivo_flag if _primo else False,
+                "TOTALE_BLOCCO_EUR": round(totale, 2) if _primo else 0.0,
+                "ERRORE": _build_errore(None, b.nota) if _primo else "",
+                "SRC_FILE": b.first_source.file,
+                "SRC_SHEET": b.first_source.sheet,
+                "SRC_ROW0": b.first_source.row_index,
+            })
 
         # Discrepancies (only if provided exists)
         prov_imp = b.provided_importo
