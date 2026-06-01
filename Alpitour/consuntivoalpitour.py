@@ -1249,6 +1249,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                     "NO_DEC": b.no_dec,
                     "ATD": ", ".join(filter(None, b.atd_raw_list)) if _vi == 0 else "",
                     "ATD_SCELTO": None,
+                    "ATD_SCELTO_HH:MM": "",
                     "TURNO_EUR": 0.0,
                     "EXTRA_MIN_RAW": 0,
                     "EXTRA_MIN": 0,
@@ -1345,6 +1346,10 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                 "NO_DEC": b.no_dec,
                 "ATD": ", ".join(filter(None, b.atd_raw_list)) if _primo else "",
                 "ATD_SCELTO": atd_sel if _primo else None,
+                "ATD_SCELTO_HH:MM": (
+                    atd_sel.strftime("%H:%M") if _primo and atd_sel is not None
+                    else ""
+                ),
                 "TURNO_EUR": round(turno_eur, 2) if _primo else 0.0,
                 "EXTRA_MIN_RAW": extra_min_raw if _primo else 0,
                 "EXTRA_MIN": int(extra_min) if _primo else 0,
@@ -1980,7 +1985,7 @@ def write_output_excel(output_path: str, detail_df: pd.DataFrame, totals_df: pd.
             cols = [
                 "DATA", "APT", "AGENZIA", "TOUR OPERATOR", "ASSISTENTE", "VOLO", "DEST.NE", "TURNO_FFILL", "TURNO_NORMALIZZATO",
                 "INIZIO_DT", "FINE_DT", "DURATA_TURNO_MIN", "NO_DEC",
-                "ATD", "ATD_SCELTO",
+                "ATD", "ATD_SCELTO", "ATD_SCELTO_HH:MM",
                 "TURNO_EUR",
                 "EXTRA_MIN_RAW", "EXTRA_MIN", "EXTRA_H:MM", "EXTRA_EUR",
                 "NOTTE_MIN_RAW", "NOTTE_MIN", "NOTTE_EUR",
