@@ -430,8 +430,10 @@ class BlockAgg:
     festivo_flag: bool
     first_source: SourceRowRef
     assistente: Optional[str] = None
-    volo: Optional[str] = None
+    volo: Optional[str] = None          # primo volo (retrocompatibilità)
+    volo_list: List[str] = field(default_factory=list)   # TUTTI i voli del blocco
     destinazione: Optional[str] = None
+    dest_list: List[str] = field(default_factory=list)   # TUTTE le destinazioni del blocco
     atd_raw_list: List[str] = field(default_factory=list)
     # optional "provided" values from the first row (for discrepancy sheet)
     provided_importo: Optional[float] = None
@@ -1002,6 +1004,8 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                                 _dc = cols.get("destinazione"); _dv = _ss(_r[_dc]) if _dc and _dc in _r.index else None
                                 _nc = cols.get("note"); _nv = _ss(_r[_nc]) if _nc and _nc in _r.index else None
                                 if _nv and _nv.lower() in ('nan','none',''): _nv = None
+                                if _vv and _vv.lower() in ('nan','none',''): _vv = None
+                                if _dv and _dv.lower() in ('nan','none',''): _dv = None
                                 blocks[_key] = BlockAgg(
                                     date=_d, apt=_apt,
                                     turno_raw_ffill=_tn, turno_norm=_tn,
@@ -1011,7 +1015,10 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                                     atd_raw_list=[atd_raw_val] if atd_raw_val else [],
                                     festivo_flag=bool(_r["__festivo"]), first_source=_src,
                                     assistente=_as or None,
-                                    volo=_vv or None, destinazione=_dv or None,
+                                    volo=_vv or None,
+                                    volo_list=[_vv] if _vv else [],
+                                    destinazione=_dv or None,
+                                    dest_list=[_dv] if _dv else [],
                                     provided_importo=parse_eur(_r[_pi_c]) if _pi_c else None,
                                     provided_extra_min=parse_minutes_from_cell(_r[_pe_c]) if _pe_c else None,
                                     provided_night_min=parse_minutes_from_cell(_r[_pn_c]) if _pn_c else None,
@@ -1026,6 +1033,13 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                                 _b.festivo_flag = _b.festivo_flag or bool(_r["__festivo"])
                                 if _src.original_order < _b.first_source.original_order:
                                     _b.first_source = _src
+                                # Accumula volo e destinazione (evita duplicati)
+                                _vc2 = cols.get("volo"); _vv2 = _ss(_r[_vc2]) if _vc2 and _vc2 in _r.index else None
+                                if _vv2 and _vv2.lower() not in ('nan','none','') and _vv2 not in _b.volo_list:
+                                    _b.volo_list.append(_vv2)
+                                _dc2 = cols.get("destinazione"); _dv2 = _ss(_r[_dc2]) if _dc2 and _dc2 in _r.index else None
+                                if _dv2 and _dv2.lower() not in ('nan','none','') and _dv2 not in _b.dest_list:
+                                    _b.dest_list.append(_dv2)
 
                 continue  # nuovo formato processato — salta il vecchio codice sotto
 
@@ -1158,7 +1172,9 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                         first_source=src,
                         assistente=assistente_val if assistente_val else None,
                         volo=volo_val,
+                        volo_list=[volo_val] if volo_val else [],
                         destinazione=dest_val,
+                        dest_list=[dest_val] if dest_val else [],
                             atd_raw_list=[atd_raw_val] if atd_raw_val else [],
                         provided_importo=prov_importo,
                         provided_extra_min=prov_extra_min,
@@ -1182,6 +1198,17 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                         b.provided_importo = parse_eur(r[prov_importo_col]) if prov_importo_col else b.provided_importo
                         b.provided_extra_min = parse_minutes_from_cell(r[prov_extra_col]) if prov_extra_col else b.provided_extra_min
                         b.provided_night_min = parse_minutes_from_cell(r[prov_night_col]) if prov_night_col else b.provided_night_min
+                    # Accumula volo e destinazione (evita duplicati)
+                    volo_col2 = cols.get("volo")
+                    if volo_col2 and volo_col2 in r.index and pd.notna(r[volo_col2]):
+                        vv2 = str(r[volo_col2]).strip()
+                        if vv2 and vv2.lower() not in ('nan', 'none', '') and vv2 not in b.volo_list:
+                            b.volo_list.append(vv2)
+                    dest_col2 = cols.get("destinazione")
+                    if dest_col2 and dest_col2 in r.index and pd.notna(r[dest_col2]):
+                        dv2 = str(r[dest_col2]).strip()
+                        if dv2 and dv2.lower() not in ('nan', 'none', '') and dv2 not in b.dest_list:
+                            b.dest_list.append(dv2)
 
     # Apply holiday dates: first try external list, otherwise use Italian holidays 2025
     holiday_dates_to_use = cfg.holiday_dates
@@ -1206,8 +1233,8 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                 "APT": b.apt,
                 "TOUR OPERATOR": cfg.to_keyword.capitalize(),
                 "ASSISTENTE": b.assistente if b.assistente else "",
-                "VOLO": b.volo if b.volo else "",
-                "DEST.NE": b.destinazione if b.destinazione else "",
+                "VOLO": " / ".join(b.volo_list) if b.volo_list else (b.volo or ""),
+                "DEST.NE": " / ".join(b.dest_list) if b.dest_list else (b.destinazione or ""),
                 "TURNO_FFILL": b.turno_raw_ffill,
                 "TURNO_NORMALIZZATO": b.turno_norm,
                 "INIZIO_DT": b.start_dt if pd.notna(b.start_dt) else None,
@@ -1290,8 +1317,8 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
             "APT": b.apt,
             "TOUR OPERATOR": cfg.to_keyword.capitalize(),
             "ASSISTENTE": b.assistente if b.assistente else "",
-            "VOLO": b.volo if b.volo else "",
-            "DEST.NE": b.destinazione if b.destinazione else "",
+            "VOLO": " / ".join(b.volo_list) if b.volo_list else (b.volo or ""),
+            "DEST.NE": " / ".join(b.dest_list) if b.dest_list else (b.destinazione or ""),
             "TURNO_FFILL": b.turno_raw_ffill,
             "TURNO_NORMALIZZATO": b.turno_norm,
             "INIZIO_DT": b.start_dt,
