@@ -465,10 +465,8 @@ class BlockAgg:
     festivo_flag: bool
     first_source: SourceRowRef
     assistente: Optional[str] = None
-    volo: Optional[str] = None          # primo volo (retrocompatibilità)
-    volo_list: List[str] = field(default_factory=list)   # TUTTI i voli del blocco
+    volo: Optional[str] = None
     destinazione: Optional[str] = None
-    dest_list: List[str] = field(default_factory=list)   # TUTTE le destinazioni del blocco
     atd_raw_list: List[str] = field(default_factory=list)
     # optional "provided" values from the first row (for discrepancy sheet)
     provided_importo: Optional[float] = None
@@ -900,9 +898,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                             first_source=src,
                             assistente=ass_str or None,
                             volo=volo_val,
-                            volo_list=[volo_val] if volo_val else [],
                             destinazione=dest_val,
-                            dest_list=[dest_val] if dest_val else [],
                             atd_raw_list=[atd_raw_val] if atd_raw_val else [],
                             provided_importo=prov_importo,
                             provided_extra_min=prov_extra_min,
@@ -917,17 +913,6 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                         b.festivo_flag = b.festivo_flag or bool(r["__festivo"])
                         if src.original_order < b.first_source.original_order:
                             b.first_source = src
-                        # Accumula volo e destinazione (evita duplicati)
-                        _vc2 = cols.get("volo")
-                        if _vc2 and _vc2 in r.index:
-                            _vv2 = _safe_str(r[_vc2])
-                            if _vv2 and _vv2 not in b.volo_list:
-                                b.volo_list.append(_vv2)
-                        _dc2 = cols.get("destinazione")
-                        if _dc2 and _dc2 in r.index:
-                            _dv2 = _safe_str(r[_dc2])
-                            if _dv2 and _dv2 not in b.dest_list:
-                                b.dest_list.append(_dv2)
 
             else:
                 # ── VECCHIO FORMATO (TURNO come stringa testo hh:mm-hh:mm) ────
@@ -1045,9 +1030,7 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                             first_source=src,
                             assistente=assistente_val,
                             volo=volo_val,
-                            volo_list=[volo_val] if volo_val else [],
                             destinazione=dest_val,
-                            dest_list=[dest_val] if dest_val else [],
                             provided_importo=prov_importo,
                             provided_extra_min=prov_extra_min,
                             provided_night_min=prov_night_min,
@@ -1062,17 +1045,6 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
                             b.provided_importo = parse_eur(r[prov_importo_col]) if prov_importo_col else b.provided_importo
                             b.provided_extra_min = parse_minutes_from_cell(r[prov_extra_col]) if prov_extra_col else b.provided_extra_min
                             b.provided_night_min = parse_minutes_from_cell(r[prov_night_col]) if prov_night_col else b.provided_night_min
-                        # Accumula volo e destinazione (evita duplicati)
-                        volo_col2 = cols.get("volo")
-                        if volo_col2 and volo_col2 in r.index and pd.notna(r[volo_col2]):
-                            vv2 = str(r[volo_col2]).strip()
-                            if vv2 and vv2.lower() not in ('nan', 'none', '') and vv2 not in b.volo_list:
-                                b.volo_list.append(vv2)
-                        dest_col2 = cols.get("destinazione")
-                        if dest_col2 and dest_col2 in r.index and pd.notna(r[dest_col2]):
-                            dv2 = str(r[dest_col2]).strip()
-                            if dv2 and dv2.lower() not in ('nan', 'none', '') and dv2 not in b.dest_list:
-                                b.dest_list.append(dv2)
 
 
     # Apply holiday dates: first try external list, otherwise use Italian holidays 2025
@@ -1129,47 +1101,36 @@ def process_files(input_files: List[str], cfg: CalcConfig) -> Tuple[pd.DataFrame
         def hmm(m: int) -> str:
             return f"{m // 60}:{m % 60:02d}"
 
-        # ── Genera una riga per ogni volo del blocco (come Alpitour) ──────────
-        # La prima riga porta tutti i valori economici; le righe aggiuntive
-        # (voli dello stesso turno accorpato) hanno €0 per evitare doppio conteggio.
-        voli_out = b.volo_list if b.volo_list else ([b.volo] if b.volo else [""])
-        dests_out = b.dest_list if b.dest_list else ([b.destinazione] if b.destinazione else [""])
-        # Allinea le due liste alla stessa lunghezza
-        while len(dests_out) < len(voli_out): dests_out.append("")
-        while len(voli_out) < len(dests_out): voli_out.append("")
-
-        for _vi, (_volo_out, _dest_out) in enumerate(zip(voli_out, dests_out)):
-            _is_first = (_vi == 0)
-            rows_detail.append({
-                "DATA": b.date.strftime("%d/%m/%Y"),
-                "APT": b.apt,
-                "TOUR OPERATOR": cfg.to_keyword.capitalize(),
-                "ASSISTENTE": b.assistente if b.assistente else "",
-                "VOLO": _volo_out or "",
-                "DEST.NE": _dest_out or "",
-                "TURNO_FFILL": b.turno_raw_ffill,
-                "TURNO_NORMALIZZATO": b.turno_norm,
-                "INIZIO_DT": b.start_dt if _is_first else None,
-                "FINE_DT": b.end_dt if _is_first else None,
-                "DURATA_TURNO_MIN": durata_min if _is_first else 0,
-                "NO_DEC": b.no_dec if _is_first else False,
-                "ATD": ", ".join(filter(None, b.atd_raw_list)) if _is_first else "",
-                "ATD_SCELTO": atd_sel if _is_first else None,
-                "TURNO_EUR": round(turno_eur, 2) if _is_first else 0.0,
-                "EXTRA_MIN_RAW": extra_min_raw if _is_first else 0,
-                "EXTRA_MIN": int(extra_min) if _is_first else 0,
-                "EXTRA_H:MM": hmm(int(extra_min)) if _is_first else "0:00",
-                "EXTRA_EUR": round(extra_eur, 2) if _is_first else 0.0,
-                "NOTTE_MIN_RAW": int(night_min_raw) if _is_first else 0,
-                "NOTTE_MIN": int(night_min) if _is_first else 0,
-                "NOTTE_EUR": round(night_eur, 2) if _is_first else 0.0,
-                "FESTIVO": b.festivo_flag if _is_first else False,
-                "TOTALE_BLOCCO_EUR": round(totale, 2) if _is_first else 0.0,
-                "ERRORE": _build_errore(None, b.nota) if _is_first else "",
-                "SRC_FILE": b.first_source.file,
-                "SRC_SHEET": b.first_source.sheet,
-                "SRC_ROW0": b.first_source.row_index,
-            })
+        rows_detail.append({
+            "DATA": b.date.strftime("%d/%m/%Y"),
+            "APT": b.apt,
+            "TOUR OPERATOR": cfg.to_keyword.capitalize(),  # Aggiungi TOUR OPERATOR
+            "ASSISTENTE": b.assistente if b.assistente else "",
+            "VOLO": b.volo if b.volo else "",
+            "DEST.NE": b.destinazione if b.destinazione else "",
+            "TURNO_FFILL": b.turno_raw_ffill,
+            "TURNO_NORMALIZZATO": b.turno_norm,
+            "INIZIO_DT": b.start_dt,
+            "FINE_DT": b.end_dt,
+            "DURATA_TURNO_MIN": durata_min,
+            "NO_DEC": b.no_dec,
+            "ATD": ", ".join(filter(None, b.atd_raw_list)),
+            "ATD_SCELTO": atd_sel,
+            "TURNO_EUR": round(turno_eur, 2),
+            "EXTRA_MIN_RAW": extra_min_raw,
+            "EXTRA_MIN": int(extra_min),
+            "EXTRA_H:MM": hmm(int(extra_min)),
+            "EXTRA_EUR": round(extra_eur, 2),
+            "NOTTE_MIN_RAW": int(night_min_raw),
+            "NOTTE_MIN": int(night_min),
+            "NOTTE_EUR": round(night_eur, 2),
+            "FESTIVO": b.festivo_flag,
+            "TOTALE_BLOCCO_EUR": round(totale, 2),
+            "ERRORE": _build_errore(None, b.nota),
+            "SRC_FILE": b.first_source.file,
+            "SRC_SHEET": b.first_source.sheet,
+            "SRC_ROW0": b.first_source.row_index,
+        })
 
         # Discrepancies (only if provided exists)
         prov_imp = b.provided_importo
