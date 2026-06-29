@@ -78,7 +78,7 @@ if not cols["data"] or not cols["apt"] or not has_orario:
 | Veratour | TOUR OPERATOR | contains (case-insensitive) |
 | Alpitour | TOUR OPERATOR | contains (case-insensitive) |
 | **Aliservice** | **AGENZIA** | **contains "aliservice"** |
-| Baobab | TOUR OPERATOR | **match ESATTO** (==) |
+| **Baobab** | TOUR OPERATOR | **match ESATTO** (==) su: `BAOBAB`, `BAOBAB/TH`, `TH` (stesso pacchetto) |
 | Domina | TOUR OPERATOR | contains "domina" |
 | MichelTours | TOUR OPERATOR | contains "micheltours" |
 | Sand | TOUR OPERATOR | contains "sand" |

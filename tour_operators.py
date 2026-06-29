@@ -253,9 +253,12 @@ def detect_tour_operators(file_path: str) -> Tuple[Set[str], Set[str]]:
 
 # Alias noti: varianti ortografiche del TO nel file → nome cartella normalizzato
 # Es: "CAPOVERDE TIME" → clean="capoverdetime" ma cartella si chiama "Caboverdetime"
+# "TH" e "BAOBAB/TH" sono lo stesso pacchetto contrattuale di Baobab → stessa cartella
 _FOLDER_ALIASES: Dict[str, str] = {
     'capoverdetime': 'caboverdetime',
     'capoverde':     'caboverdetime',
+    'th':            'baobab',   # TH da solo nel file Excel → Baobab/
+    'baobabth':      'baobab',   # BAOBAB/TH dopo strip non-alpha → Baobab/
 }
 
 
