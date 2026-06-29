@@ -1,0 +1,40 @@
+================================================================================
+LOG MODIFICHE — 2026-06-09
+Progetto: CalcoloPianoLavoro (SCAY Group)
+================================================================================
+
+DATA: 09/06/2026 13:48 – 13:55
+
+MODIFICA: Accorpamento multi-volo lato fatturazione — Veratour
+---------------------------------------------------------------
+Problema rilevato:
+  Alpitour aveva già una logica di output multi-volo: quando un blocco turno
+  contiene più voli (righe slave con stesso INIZIO TURNO), nell'output Excel
+  (DettaglioBlocchi) veniva generata una riga per ogni volo, con i valori
+  economici solo sulla prima riga (€0 sulle successive).
+  Veratour non aveva questa logica: teneva solo il primo volo del blocco,
+  perdendo i voli aggiuntivi dell'accorpamento.
+
+Soluzione applicata su: Veratour/consuntivoveratour.py
+  1. BlockAgg → aggiunti campi volo_list e dest_list (List[str])
+  2. Merge blocchi (nuovo formato 2026): accumula tutti i voli in volo_list
+     e tutte le destinazioni in dest_list (evitando duplicati)
+  3. Merge blocchi (vecchio formato TURNO stringa): stessa logica
+  4. Output rows_detail: genera una riga per ogni volo del blocco
+     - prima riga: valori economici reali (turno €, extra €, notte €, totale €)
+     - righe successive: VOLO/DEST.NE diversi, tutti gli importi a 0.0
+
+Backup salvato in:
+  file_vecchi/consuntivoveratour_BACKUP_20260609_135142.py
+
+Commit Git:
+  hash:    61cd147
+  branch:  main
+  remote:  https://github.com/capmaurizio/veratour-piano-lavoro.git
+  message: feat(veratour): accorpamento multi-volo lato fatturazione (uguale ad Alpitour)
+
+File toccati:
+  - Veratour/consuntivoveratour.py   (MODIFICATO)
+  - file_vecchi/consuntivoveratour_BACKUP_20260609_135142.py  (NUOVO)
+
+================================================================================
